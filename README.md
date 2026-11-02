@@ -61,5 +61,6 @@ Poslednje dve komande pokreću alternativne ulaze; nisu potrebne istovremeno. AP
 - [Predlog razvojnog toka prema oblastima ERS](docs/learning-path.md)
 - [Pravila za AI agente](AGENTS.md)
 - [ADR šablon](docs/templates/adr.md)
+- [Uputstvo za docker](docs/docker.md)
 
 Materijali predmeta i detaljna projektna specifikacija predstavljaju izvor poslovnih zahteva; primeri u repozitorijumu služe isključivo za početnu organizaciju koda.
