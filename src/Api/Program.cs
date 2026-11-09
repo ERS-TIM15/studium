@@ -5,6 +5,11 @@ using Infrastructure.Demo;
 
 var builder = WebApplication.CreateBuilder(args);
 
+
+builder.Services.AddControllers();
+builder.Services.AddScoped<Application.ITeamService, Application.Teams.TeamService>();
+
+
 // Composition root: spoljašnji sloj bira implementaciju ugovora.
 builder.Services.AddSingleton<ICourseReader>(_ => DemoData.CreateCourseReader());
 builder.Services.AddScoped<ListCoursesHandler>();
@@ -16,6 +21,8 @@ builder.Services.AddScoped<CreateActivityHandler>();
 builder.Services.AddScoped<ListActivitiesHandler>();
 
 var app = builder.Build();
+
+app.MapControllers();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 

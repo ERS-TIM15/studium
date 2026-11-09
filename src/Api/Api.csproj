@@ -3,4 +3,7 @@
     <ProjectReference Include="../Application/Application.csproj" />
     <ProjectReference Include="../Infrastructure/Infrastructure.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.3.1" />
+  </ItemGroup>
 </Project>
