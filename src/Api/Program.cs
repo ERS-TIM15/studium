@@ -1,14 +1,16 @@
 using Api.Contracts;
 using Application.Activities;
 using Application.Courses;
+using Domain.Activity;
 using Infrastructure.Demo;
+using Interface.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
 
 builder.Services.AddControllers();
 builder.Services.AddScoped<Application.ITeamService, Application.Teams.TeamService>();
-
+builder.Services.AddScoped<Interface.Repositories.ITeamRepository, MockTeamRepository>();
 
 // Composition root: spoljašnji sloj bira implementaciju ugovora.
 builder.Services.AddSingleton<ICourseReader>(_ => DemoData.CreateCourseReader());
@@ -92,4 +94,17 @@ app.Run();
 // Potrebno za WebApplicationFactory u integracionim testovima.
 public partial class Program
 {
+}
+
+class MockTeamRepository : Interface.Repositories.ITeamRepository
+{
+    public Task<Team?> GetByIdAsync(Guid id)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task UpdateAsync(Team team)
+    {
+        throw new NotImplementedException();
+    }
 }
