@@ -31,6 +31,38 @@ public class StudentTeam
 
     public TeamCompositionStatus Status { get; set; } = TeamCompositionStatus.Open;
 
+    /// <summary>
+    /// Predstavnik tima. Dok ne postoji posebna dodela predstavnika, to je student koji je osnovao tim.
+    /// </summary>
+    public Guid RepresentativeStudentId { get; private set; }
+
+    /// <summary>
+    /// Kada je uključeno, timu mogu pristupiti samo studenti koji su u njega pozvani.
+    /// </summary>
+    public bool IsInviteOnly { get; private set; }
+
+    public bool IsRepresentative(Guid studentId) =>
+        studentId != Guid.Empty && studentId == RepresentativeStudentId;
+
+    /// <summary>
+    /// Zatvara tim samo za pozvane studente ili ga ponovo otvara. Postojeći članovi i
+    /// već poslati pozivi ostaju nepromenjeni. Proveru da li je pozivalac predstavnik
+    /// tima vrši slučaj upotrebe.
+    /// </summary>
+    public void SetInviteOnly(bool inviteOnly)
+    {
+        IsInviteOnly = inviteOnly;
+    }
+
+    /// <summary>
+    /// Proverava samo pravilo pristupa: otvoren tim prima svakoga, a tim samo po pozivu
+    /// samo pozvane studente. Ostala pravila pristupanja (zaključan sastav, najveća
+    /// veličina, jedan tim po aktivnosti) pripadaju slučaju upotrebe pristupanja timu,
+    /// koji još nije implementiran.
+    /// </summary>
+    public bool AllowsJoinBy(Guid studentId) =>
+        !IsInviteOnly || PendingInvitationStudentIds.Contains(studentId);
+
     public static TeamCreation TryCreate(
         Guid courseOfferingId,
         Guid projectActivityId,
@@ -78,7 +110,9 @@ public class StudentTeam
             MaxSize = maxSize,
             MemberStudentIds = new List<Guid> { creatorStudentId },
             PendingInvitationStudentIds = new List<Guid>(),
-            Status = TeamCompositionStatus.Open
+            Status = TeamCompositionStatus.Open,
+            RepresentativeStudentId = creatorStudentId,
+            IsInviteOnly = false
         });
     }
 }

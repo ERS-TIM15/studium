@@ -25,6 +25,12 @@ Priloženi **demo katalog predmeta** prikazuje tok `API/ConsoleUi → Applicatio
 
 **Ograničenje:** i ovaj endpoint trenutno čita isključivo memorijske demo podatke (`DemoData.CreateCourseReader()`), bez trajne baze, autentifikacije, autorizacije, unosa/izmene/brisanja predmeta i provere jedinstvenosti. Ne tretirati ga kao završen ST-003 niti koristiti za stvarne podatke. Za integraciju potpunog ST-003 potrebni su zasebni zahtevi, validacija i testovi prema projektnoj specifikaciji.
 
+### Delimična ST-021: tim samo po pozivu
+
+`PUT /teams/{teamId}/invite-only` sa telom `{ "inviteOnly": true }` zatvara tim tako da mu mogu pristupiti samo pozvani studenti; `false` ga ponovo otvara. Promenu sme da napravi samo predstavnik tima (student koji je osnovao tim), inače se vraća `403`.
+
+**Ograničenja:** identitet se privremeno čita iz zaglavlja `X-Student-Id` dok ne postoji prijava korisnika (ST-002) — to nije bezbednosna kontrola. Timovi se čuvaju u memoriji, a postoji jedan demo tim (`66666666-…`, predstavnik `55555555-…`). Pristupanje timu, slanje i prihvatanje poziva još nisu implementirani; pravilo je spremno u `StudentTeam.AllowsJoinBy` za taj slučaj upotrebe.
+
 ## Preduslovi
 
 - .NET **8 SDK** (`dotnet --version`)
