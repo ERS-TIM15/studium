@@ -33,9 +33,11 @@ public sealed class InMemoryTeamRepositoryTests
     {
         var team = CreateTeam();
         var repository = new InMemoryTeamRepository(new[] { team });
+        var updated = CreateTeam();
+        updated.Id = team.Id;
+        updated.SetInviteOnly(true);
 
-        team.SetInviteOnly(true);
-        await repository.UpdateAsync(team);
+        await repository.UpdateAsync(updated);
         var result = await repository.GetByIdAsync(team.Id);
 
         Assert.That(result!.IsInviteOnly, Is.True);
