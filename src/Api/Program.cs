@@ -15,6 +15,7 @@ builder.Services.AddScoped<SearchCoursesHandler>();
 builder.Services.AddSingleton<IActivityRepository>(_ => DemoData.CreateActivityRepository());
 builder.Services.AddSingleton<IActivityContextReader, InMemoryActivityContextReader>();
 builder.Services.AddScoped<CreateActivityHandler>();
+builder.Services.AddScoped<ListActivitiesHandler>();
 
 var app = builder.Build();
 
@@ -79,6 +80,17 @@ app.MapPost("/Course/{contextSlug}/CreateActivity", async (
         CreateActivityStatus.Canceled => Results.StatusCode(StatusCodes.Status499ClientClosedRequest),
         _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError)
     };
+});
+
+app.MapGet("/ListActivities", async (
+    ListActivitiesHandler handler,
+    CancellationToken cancellationToken) =>
+{
+    var result = await handler.HandleAsync(cancellationToken);
+
+    return result.IsSuccess
+        ? Results.Ok(result.Activities)
+        : Results.StatusCode(StatusCodes.Status499ClientClosedRequest);
 });
 
 app.Run();
