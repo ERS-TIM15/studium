@@ -124,13 +124,15 @@ public sealed class ListActivitiesEndpointTests
     }
 
     [Test]
-    public async Task GetListActivities_WhenRepositoryCancels_ReturnsClientClosedRequest()
+    public async Task GetListActivities_WhenRepositoryReturnsCanceled_Returns499()
     {
         using var factory = CreateFactoryWithRepository(new CanceledActivityRepository());
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync(ListActivitiesPath);
 
+        // 499 = klijent je zatvorio zahtev; mapiranje iz Program.cs za
+        // neuspešan ListActivitiesResult mora ostati na ovom statusu.
         Assert.That(
             (int)response.StatusCode,
             Is.EqualTo(StatusCodes.Status499ClientClosedRequest));
