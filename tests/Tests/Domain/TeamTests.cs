@@ -101,6 +101,27 @@ public sealed class TeamTests
         Assert.That(creation.Team.MaxSize, Is.EqualTo(3));
     }
 
+    [Test]
+    public void Lock_ChangesStatusToLocked()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+
+        team.Lock();
+
+        Assert.That(team.Status, Is.EqualTo(TeamCompositionStatus.Locked));
+    }
+
+    [Test]
+    public void Lock_WhenAlreadyLocked_LeavesStatusLocked()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+
+        team.Lock();
+        team.Lock();
+
+        Assert.That(team.Status, Is.EqualTo(TeamCompositionStatus.Locked));
+    }
+
     private static void AssertFailure(TeamCreation creation)
     {
         Assert.Multiple(() =>

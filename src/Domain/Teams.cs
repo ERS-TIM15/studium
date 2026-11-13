@@ -29,7 +29,12 @@ public class StudentTeam
 
     public List<Guid> PendingInvitationStudentIds { get; set; } = new();
 
-    public TeamCompositionStatus Status { get; set; } = TeamCompositionStatus.Open;
+    public TeamCompositionStatus Status { get; private set; } = TeamCompositionStatus.Open;
+
+    public void Lock()
+    {
+        Status = TeamCompositionStatus.Locked;
+    }
 
     public static TeamCreation TryCreate(
         Guid courseOfferingId,
