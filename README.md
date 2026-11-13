@@ -48,6 +48,12 @@ curl -X POST http://localhost:5000/Course/ERS-11111/CreateActivity \
 
 **Ograničenje:** aktivnosti se čuvaju samo u memoriji procesa preko porta `IActivityRepository` (`InMemoryActivityRepository`) i gube se pri ponovnom pokretanju. Nema trajne baze, autentifikacije, autorizacije ni provere prava nad konkretnim izvođenjem predmeta. Ovaj tok ne predstavlja završenu implementaciju ST-021 (formiranje studentskih timova) niti bilo kog drugog ST zahteva.
 
+### Delimična ST-021: tim samo po pozivu
+
+`PUT /teams/{teamId}/invite-only` sa telom `{ "inviteOnly": true }` zatvara tim tako da mu mogu pristupiti samo pozvani studenti; `false` ga ponovo otvara. Promenu sme da napravi samo predstavnik tima (student koji je osnovao tim), inače se vraća `403`.
+
+**Ograničenja:** identitet se privremeno čita iz zaglavlja `X-Student-Id` dok ne postoji prijava korisnika (ST-002) — to nije bezbednosna kontrola. Timovi se čuvaju u memoriji, a postoji jedan demo tim (`66666666-…`, predstavnik `55555555-…`). Pristupanje timu, slanje i prihvatanje poziva još nisu implementirani; pravilo je spremno u `StudentTeam.AllowsJoinBy` za taj slučaj upotrebe.
+
 ## Preduslovi
 
 - .NET **8 SDK** (`dotnet --version`)

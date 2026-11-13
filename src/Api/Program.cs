@@ -1,8 +1,10 @@
 using Api.Contracts;
 using Application.Activities;
 using Application.Courses;
+using Application.Teams;
 using Infrastructure.Activities;
 using Infrastructure.Demo;
+using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +18,10 @@ builder.Services.AddSingleton<IActivityRepository>(_ => DemoData.CreateActivityR
 builder.Services.AddSingleton<IActivityContextReader, InMemoryActivityContextReader>();
 builder.Services.AddScoped<CreateActivityHandler>();
 builder.Services.AddScoped<ListActivitiesHandler>();
+
+// Memorijski adapter mora biti singleton da bi izmene timova preživele između zahteva.
+builder.Services.AddSingleton<ITeamRepository>(_ => DemoData.CreateTeamRepository());
+builder.Services.AddScoped<SetTeamInviteOnlyHandler>();
 
 var app = builder.Build();
 
@@ -91,6 +97,51 @@ app.MapGet("/ListActivities", async (
     return result.IsSuccess
         ? Results.Ok(result.Activities)
         : Results.StatusCode(StatusCodes.Status499ClientClosedRequest);
+});
+
+// ST-021 (kontrola pristupa): predstavnik tima zatvara tim samo za pozvane studente
+// ili ga ponovo otvara.
+// PRIVREMENO: dok ne postoji prijava korisnika (ST-002), identitet se čita iz zaglavlja
+// X-Student-Id. To NIJE bezbednosna kontrola i mora se zameniti identitetom iz prijave.
+app.MapPut("/teams/{teamId:guid}/invite-only", async (
+    Guid teamId,
+    [FromHeader(Name = "X-Student-Id")] Guid? studentId,
+    SetTeamInviteOnlyRequest request,
+    SetTeamInviteOnlyHandler handler,
+    CancellationToken cancellationToken) =>
+{
+    if (studentId is null)
+    {
+        return Results.Problem(
+            title: "Korisnik nije prijavljen",
+            statusCode: StatusCodes.Status401Unauthorized);
+    }
+
+    if (request.InviteOnly is null)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["inviteOnly"] = new[] { "Vrednost inviteOnly je obavezna." }
+        });
+    }
+
+    var result = await handler.HandleAsync(
+        new SetTeamInviteOnlyCommand(teamId, studentId.Value, request.InviteOnly.Value),
+        cancellationToken);
+
+    return result.Status switch
+    {
+        SetTeamInviteOnlyStatus.Updated => Results.Ok(new { teamId, inviteOnly = result.InviteOnly }),
+        SetTeamInviteOnlyStatus.TeamNotFound => Results.Problem(
+            title: "Tim nije pronađen",
+            detail: result.Error,
+            statusCode: StatusCodes.Status404NotFound),
+        SetTeamInviteOnlyStatus.Forbidden => Results.Problem(
+            title: "Nedovoljno ovlašćenje",
+            detail: result.Error,
+            statusCode: StatusCodes.Status403Forbidden),
+        _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError)
+    };
 });
 
 app.Run();
