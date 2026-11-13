@@ -3,8 +3,17 @@ using Application.Activities;
 using Application.Courses;
 using Infrastructure.Activities;
 using Infrastructure.Demo;
+using Infrastructure.Teams;
+using Interface.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
+
+
+builder.Services.AddControllers();
+builder.Services.AddScoped<Application.ITeamService, Application.Teams.TeamService>();
+builder.Services.AddSingleton<InMemoryTeamRepository>();
+builder.Services.AddSingleton<ITeamRepository>(serviceProvider =>
+    serviceProvider.GetRequiredService<InMemoryTeamRepository>());
 
 // Composition root: spoljašnji sloj bira implementaciju ugovora.
 builder.Services.AddSingleton<ICourseReader>(_ => DemoData.CreateCourseReader());
@@ -17,6 +26,8 @@ builder.Services.AddSingleton<IActivityContextReader, InMemoryActivityContextRea
 builder.Services.AddScoped<CreateActivityHandler>();
 
 var app = builder.Build();
+
+app.MapControllers();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
