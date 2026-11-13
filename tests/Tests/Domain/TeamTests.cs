@@ -190,6 +190,142 @@ public sealed class TeamTests
         Assert.That(team.AllowsJoinBy(Guid.NewGuid()), Is.True);
     }
 
+    [Test]
+    public void IsMember_IdentifiesMembersCorrectly()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        var other = Guid.NewGuid();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(team.IsMember(Creator), Is.True);
+            Assert.That(team.IsMember(other), Is.False);
+            Assert.That(team.IsMember(Guid.Empty), Is.False);
+        });
+    }
+
+    [Test]
+    public void HasPendingInvitation_IdentifiesPendingInvitations()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        var invited = Guid.NewGuid();
+        var notInvited = Guid.NewGuid();
+
+        team.InviteStudent(invited);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(team.HasPendingInvitation(invited), Is.True);
+            Assert.That(team.HasPendingInvitation(notInvited), Is.False);
+            Assert.That(team.HasPendingInvitation(Guid.Empty), Is.False);
+        });
+    }
+
+    [Test]
+    public void InviteStudent_AddsPendingInvitation_WhenValid()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        var candidate = Guid.NewGuid();
+
+        var result = team.InviteStudent(candidate);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.True);
+            Assert.That(team.PendingInvitationStudentIds, Contains.Item(candidate));
+            Assert.That(team.HasPendingInvitation(candidate), Is.True);
+        });
+    }
+
+    [Test]
+    public void InviteStudent_RejectsEmptyGuid()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+
+        var result = team.InviteStudent(Guid.Empty);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False);
+            Assert.That(team.PendingInvitationStudentIds, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void InviteStudent_RejectsExistingMember()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+
+        var result = team.InviteStudent(Creator);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False);
+            Assert.That(team.PendingInvitationStudentIds, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void InviteStudent_RejectsAlreadyInvitedStudent()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        var candidate = Guid.NewGuid();
+
+        team.InviteStudent(candidate);
+        var repeatedResult = team.InviteStudent(candidate);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(repeatedResult, Is.False);
+            Assert.That(team.PendingInvitationStudentIds.Count, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public void InviteStudent_RejectsWhenTeamIsLocked()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        team.Status = TeamCompositionStatus.Locked;
+        var candidate = Guid.NewGuid();
+
+        var result = team.InviteStudent(candidate);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False);
+            Assert.That(team.PendingInvitationStudentIds, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void InviteStudent_RejectsWhenTeamIsFull()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 1, 1).Team!;
+        var candidate = Guid.NewGuid();
+
+        var result = team.InviteStudent(candidate);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False);
+            Assert.That(team.PendingInvitationStudentIds, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void InviteStudent_AllowsJoinByWhenInviteOnly()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        var candidate = Guid.NewGuid();
+        team.SetInviteOnly(true);
+
+        Assert.That(team.AllowsJoinBy(candidate), Is.False);
+
+        team.InviteStudent(candidate);
+
+        Assert.That(team.AllowsJoinBy(candidate), Is.True);
+    }
+
     private static void AssertFailure(TeamCreation creation)
     {
         Assert.Multiple(() =>

@@ -63,6 +63,53 @@ public class StudentTeam
     public bool AllowsJoinBy(Guid studentId) =>
         !IsInviteOnly || PendingInvitationStudentIds.Contains(studentId);
 
+    /// <summary>
+    /// Proverava da li je student član tima.
+    /// </summary>
+    public bool IsMember(Guid studentId) =>
+        studentId != Guid.Empty && MemberStudentIds.Contains(studentId);
+
+    /// <summary>
+    /// Proverava da li student već ima poslat poziv na čekanju.
+    /// </summary>
+    public bool HasPendingInvitation(Guid studentId) =>
+        studentId != Guid.Empty && PendingInvitationStudentIds.Contains(studentId);
+
+    /// <summary>
+    /// Dodaje poziv za studenta ukoliko tim nije zaključan ili popunjen i student već nije član ili pozvan.
+    /// Proveru da li je pozivalac član tima vrši slučaj upotrebe.
+    /// </summary>
+    public bool InviteStudent(Guid studentId)
+    {
+        if (studentId == Guid.Empty)
+        {
+            return false;
+        }
+
+        if (Status == TeamCompositionStatus.Locked)
+        {
+            return false;
+        }
+
+        if (MemberStudentIds.Count >= MaxSize)
+        {
+            return false;
+        }
+
+        if (MemberStudentIds.Contains(studentId))
+        {
+            return false;
+        }
+
+        if (PendingInvitationStudentIds.Contains(studentId))
+        {
+            return false;
+        }
+
+        PendingInvitationStudentIds.Add(studentId);
+        return true;
+    }
+
     public static TeamCreation TryCreate(
         Guid courseOfferingId,
         Guid projectActivityId,
