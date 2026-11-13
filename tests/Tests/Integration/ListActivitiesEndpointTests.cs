@@ -1,6 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
+using Application.Activities;
+using Domain.Activity;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using NUnit.Framework;
 
 namespace Tests.Integration;
@@ -36,6 +41,25 @@ public sealed class ListActivitiesEndpointTests
         new(name, "Prva faza", startDate ?? Start, endDate ?? End);
 
     private static WebApplicationFactory<Program> CreateFactory() => new();
+
+    private static WebApplicationFactory<Program> CreateFactoryWithRepository(IActivityRepository repository) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<IActivityRepository>();
+                services.AddSingleton(repository);
+            }));
+
+    private sealed class CanceledActivityRepository : IActivityRepository
+    {
+        public Task<ActivityAddResult> AddAsync(
+            Activity? activity,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(ActivityAddResult.Canceled());
+
+        public Task<ActivityListResult> ListAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(ActivityListResult.Canceled());
+    }
 
     [Test]
     public async Task GetListActivities_WhenThereAreNoActivities_ReturnsEmptyArray()
@@ -97,5 +121,18 @@ public sealed class ListActivitiesEndpointTests
         Assert.That(
             activities!.Select(activity => activity.Name),
             Is.EqualTo(new[] { "Ranija", "Kasnija" }));
+    }
+
+    [Test]
+    public async Task GetListActivities_WhenRepositoryCancels_ReturnsClientClosedRequest()
+    {
+        using var factory = CreateFactoryWithRepository(new CanceledActivityRepository());
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync(ListActivitiesPath);
+
+        Assert.That(
+            (int)response.StatusCode,
+            Is.EqualTo(StatusCodes.Status499ClientClosedRequest));
     }
 }
