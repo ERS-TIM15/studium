@@ -1,62 +1,69 @@
-using Application.Common;
-using Application.Courses;
 using Domain.Activity;
 
 namespace Application.Activities;
 
 /// <summary>
-/// Dodaje aktivnost postojećem predmetu. Katalog predmeta se ne menja; postojeći port
-/// <see cref="ICourseReader"/> služi samo da se predmet pronađe po oznaci oblika
-/// <c>OZNAKA-xxxxx</c> (vidi <see cref="EntitySlug"/>).
+/// Dodaje aktivnost u kontekst koji razrešava <see cref="IActivityContextReader"/>.
+/// Katalog predmeta se ne menja, a oznaka iz URL-a se ne tumači ovde: dokle god
+/// čitač vraća <see cref="ActivityContext"/>, slučaj upotrebe ne zna da li je
+/// kontekst kataloški predmet ili izvođenje predmeta.
+/// Neispravni podaci i otkazan zahtev vraćaju se kao status, bez izuzetaka.
 /// </summary>
 public sealed class CreateActivityHandler
 {
     private readonly IActivityRepository _repository;
-    private readonly ICourseReader _courseReader;
+    private readonly IActivityContextReader _contextReader;
 
-    public CreateActivityHandler(IActivityRepository repository, ICourseReader courseReader)
+    public CreateActivityHandler(
+        IActivityRepository repository,
+        IActivityContextReader contextReader)
     {
         _repository = repository;
-        _courseReader = courseReader;
+        _contextReader = contextReader;
     }
 
     public async Task<CreateActivityResult> HandleAsync(
         CreateActivityCommand command,
         CancellationToken cancellationToken = default)
     {
-        var courses = await _courseReader.ListAsync(cancellationToken);
-        var matches = courses
-            .Where(course => EntitySlug.Matches(command.CourseSlug, course.Code, course.Id))
-            .ToList();
+        var lookup = await _contextReader.ResolveAsync(command.ContextSlug, cancellationToken);
 
-        if (matches.Count == 0)
+        if (!lookup.IsSuccess)
         {
-            return CreateActivityResult.CourseNotFound(command.CourseSlug);
+            return lookup.Status switch
+            {
+                ActivityContextStatus.NotFound =>
+                    CreateActivityResult.ContextNotFound(command.ContextSlug),
+                ActivityContextStatus.Canceled =>
+                    CreateActivityResult.Canceled(),
+                _ => CreateActivityResult.InvalidRequest(
+                    lookup.Error ?? $"Oznaka konteksta \"{command.ContextSlug}\" nije jedinstvena.")
+            };
         }
 
-        if (matches.Count > 1)
+        var creation = Activity.TryCreate(
+            Guid.NewGuid(),
+            lookup.Context!.Id,
+            command.Name,
+            command.Description,
+            command.StartDate,
+            command.EndDate);
+
+        if (creation.Activity is not { } activity)
         {
             return CreateActivityResult.InvalidRequest(
-                $"Oznaka predmeta \"{command.CourseSlug}\" nije jedinstvena.");
+                creation.Error ?? "Nevažeći podaci aktivnosti.");
         }
 
-        Activity activity;
-        try
-        {
-            activity = new Activity(
-                Guid.NewGuid(),
-                matches[0].Id,
-                command.Name,
-                command.Description,
-                command.StartDate,
-                command.EndDate);
-        }
-        catch (ArgumentException exception)
-        {
-            return CreateActivityResult.InvalidRequest(exception.Message);
-        }
+        var outcome = await _repository.AddAsync(activity, cancellationToken);
 
-        await _repository.AddAsync(activity, cancellationToken);
-        return CreateActivityResult.Created(ActivityListItem.From(activity));
+        return outcome.Status switch
+        {
+            ActivityAddStatus.Added => CreateActivityResult.Created(ActivityListItem.From(activity)),
+            ActivityAddStatus.DuplicateId => CreateActivityResult.Conflict(
+                "Aktivnost sa istim identifikatorom već postoji."),
+            ActivityAddStatus.Canceled => CreateActivityResult.Canceled(),
+            _ => CreateActivityResult.InvalidRequest("Aktivnost nije ispravna.")
+        };
     }
 }

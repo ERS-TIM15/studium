@@ -1,15 +1,16 @@
 using System.Net;
 using System.Net.Http.Json;
+using Application.Activities;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 
 namespace Tests.Integration;
 
 [TestFixture]
-public sealed class ActivityEndpointsTests
+public sealed class CreateActivityEndpointTests
 {
-    private const string ListActivitiesPath = "/ListActivities";
-    private static readonly Guid ExistingCourseId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+    private static readonly Guid ExistingContextId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private const string ExistingCourseSlug = "ERS-11111";
     private const string MissingCourseSlug = "XXX-33333";
     private static readonly DateTime Start = new(2026, 3, 1, 8, 0, 0, DateTimeKind.Utc);
@@ -23,7 +24,7 @@ public sealed class ActivityEndpointsTests
 
     private sealed record ActivityResponse(
         Guid Id,
-        Guid CourseId,
+        Guid ContextId,
         string Name,
         string Description,
         DateTime StartDate,
@@ -39,8 +40,18 @@ public sealed class ActivityEndpointsTests
 
     private static WebApplicationFactory<Program> CreateFactory() => new();
 
+    private static async Task AssertNothingStoredAsync(WebApplicationFactory<Program> factory)
+    {
+        var repository = factory.Services.GetRequiredService<IActivityRepository>();
+
+        var stored = await repository.ListAsync();
+
+        Assert.That(stored.IsSuccess, Is.True);
+        Assert.That(stored.Activities, Is.Empty);
+    }
+
     [Test]
-    public async Task PostCreateActivity_ForExistingCourseSlug_ReturnsCreatedAndIsListed()
+    public async Task PostCreateActivity_ForExistingCourseSlug_ReturnsCreated()
     {
         using var factory = CreateFactory();
         using var client = factory.CreateClient();
@@ -50,38 +61,19 @@ public sealed class ActivityEndpointsTests
             ValidBody());
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
-        Assert.That(response.Headers.Location?.OriginalString, Is.EqualTo(ListActivitiesPath));
+        Assert.That(response.Headers.Location, Is.Null);
 
         var created = await response.Content.ReadFromJsonAsync<ActivityResponse>();
         Assert.That(created, Is.Not.Null);
         Assert.Multiple(() =>
         {
             Assert.That(created!.Id, Is.Not.EqualTo(Guid.Empty));
-            Assert.That(created.CourseId, Is.EqualTo(ExistingCourseId));
+            Assert.That(created.ContextId, Is.EqualTo(ExistingContextId));
             Assert.That(created.Name, Is.EqualTo("Timski projekat"));
             Assert.That(created.Description, Is.EqualTo("Prva faza"));
             Assert.That(created.StartDate, Is.EqualTo(Start));
             Assert.That(created.EndDate, Is.EqualTo(End));
         });
-
-        var list = await client.GetFromJsonAsync<ActivityResponse[]>(ListActivitiesPath);
-
-        Assert.That(list, Is.Not.Null);
-        Assert.That(list, Has.Length.EqualTo(1));
-        Assert.That(list![0].Id, Is.EqualTo(created!.Id));
-    }
-
-    [Test]
-    public async Task GetListActivities_WhenThereAreNoActivities_ReturnsEmptyArray()
-    {
-        using var factory = CreateFactory();
-        using var client = factory.CreateClient();
-
-        var response = await client.GetAsync(ListActivitiesPath);
-
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var activities = await response.Content.ReadFromJsonAsync<ActivityResponse[]>();
-        Assert.That(activities, Is.Empty);
     }
 
     [Test]
@@ -95,9 +87,7 @@ public sealed class ActivityEndpointsTests
             ValidBody());
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-
-        var activities = await client.GetFromJsonAsync<ActivityResponse[]>(ListActivitiesPath);
-        Assert.That(activities, Is.Empty);
+        await AssertNothingStoredAsync(factory);
     }
 
     [Test]
@@ -111,9 +101,7 @@ public sealed class ActivityEndpointsTests
             ValidBody(name: " "));
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-
-        var activities = await client.GetFromJsonAsync<ActivityResponse[]>(ListActivitiesPath);
-        Assert.That(activities, Is.Empty);
+        await AssertNothingStoredAsync(factory);
     }
 
     [Test]
@@ -127,25 +115,21 @@ public sealed class ActivityEndpointsTests
             ValidBody(startDate: End, endDate: Start));
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-
-        var activities = await client.GetFromJsonAsync<ActivityResponse[]>(ListActivitiesPath);
-        Assert.That(activities, Is.Empty);
+        await AssertNothingStoredAsync(factory);
     }
 
     [Test]
-    public async Task PostCreateActivity_WithRawCourseId_ReturnsNotFound()
+    public async Task PostCreateActivity_WithRawIdentifier_ReturnsNotFound()
     {
         using var factory = CreateFactory();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync(
-            CreateActivityPath(ExistingCourseId.ToString()),
+            CreateActivityPath(ExistingContextId.ToString()),
             ValidBody());
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-
-        var activities = await client.GetFromJsonAsync<ActivityResponse[]>(ListActivitiesPath);
-        Assert.That(activities, Is.Empty);
+        await AssertNothingStoredAsync(factory);
     }
 
     [Test]
@@ -161,32 +145,6 @@ public sealed class ActivityEndpointsTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
         var created = await response.Content.ReadFromJsonAsync<ActivityResponse>();
-        Assert.That(created!.CourseId, Is.EqualTo(ExistingCourseId));
-    }
-
-    [Test]
-    public async Task GetListActivities_ReturnsActivitiesOrderedByStartDate()
-    {
-        using var factory = CreateFactory();
-        using var client = factory.CreateClient();
-
-        var later = await client.PostAsJsonAsync(
-            CreateActivityPath(ExistingCourseSlug),
-            ValidBody(name: "Kasnija", startDate: Start.AddDays(10), endDate: End.AddDays(10)));
-        var earlier = await client.PostAsJsonAsync(
-            CreateActivityPath(ExistingCourseSlug),
-            ValidBody(name: "Ranija"));
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(later.StatusCode, Is.EqualTo(HttpStatusCode.Created));
-            Assert.That(earlier.StatusCode, Is.EqualTo(HttpStatusCode.Created));
-        });
-
-        var activities = await client.GetFromJsonAsync<ActivityResponse[]>(ListActivitiesPath);
-
-        Assert.That(activities, Is.Not.Null);
-        Assert.That(activities!.Select(activity => activity.Name),
-            Is.EqualTo(new[] { "Ranija", "Kasnija" }));
+        Assert.That(created!.ContextId, Is.EqualTo(ExistingContextId));
     }
 }

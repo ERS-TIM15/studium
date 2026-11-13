@@ -1,7 +1,7 @@
 namespace Application.Activities;
 
 public sealed record CreateActivityCommand(
-    string CourseSlug,
+    string ContextSlug,
     string Name,
     string Description,
     DateTime StartDate,

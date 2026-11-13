@@ -27,14 +27,17 @@ Priloženi **demo katalog predmeta** prikazuje tok `API/ConsoleUi → Applicatio
 
 ### Delimična evidencija aktivnosti predmeta (grana ST-021)
 
-- `POST /Course/{courseSlug}/CreateActivity` dodaje aktivnost postojećem demonstracionom predmetu i vraća `201 Created`. Nepostojeći predmet daje `404`, a nevažeći naziv ili interval daje `400` bez promene stanja.
-- `GET /ListActivities` vraća sve aktivnosti sortirane po datumu početka.
+- `POST /Course/{contextSlug}/CreateActivity` dodaje aktivnost kontekstu koji razrešava port `IActivityContextReader` i vraća `201 Created`. Nepostojeći kontekst daje `404`, a nevažeći naziv ili interval daje `400` bez promene stanja. Dupli identifikator aktivnosti vraća `409`.
 
-`courseSlug` je kratka oznaka oblika `OZNAKA-xxxxx`, gde je `OZNAKA` oznaka predmeta, a `xxxxx` poslednjih pet znakova njegovog identifikatora (bez razlike između velikih i malih slova). Isti obrazac važi i za buduće rute pojedinačne aktivnosti (`/Course/{courseSlug}/Activity/{activitySlug}`, gde je `activitySlug` oblika `NAZIV-xxxxx`).
+Domen i memorijski adapter ne bacaju izuzetke za neispravne podatke ni za otkazane zahteve: `Activity.TryCreate` vraća `ActivityCreation`, a port `IActivityRepository` vraća `ActivityAddResult` odnosno `ActivityListResult` sa eksplicitnim statusom (`Added`, `DuplicateId`, `InvalidActivity`, `Canceled`). Otkazan zahtev se prema klijentu prijavljuje statusom `499`, a ne izuzetkom.
+
+`contextSlug` je kratka oznaka oblika `OZNAKA-xxxxx`, gde je `OZNAKA` oznaka predmeta, a `xxxxx` poslednjih pet znakova njegovog identifikatora (bez razlike između velikih i malih slova). Isti obrazac važi i za buduće rute pojedinačne aktivnosti (`/Course/{contextSlug}/Activity/{activitySlug}`, gde je `activitySlug` oblika `NAZIV-xxxxx`).
+
+**Kontekst aktivnosti:** sloj `Domain` i `IActivityRepository` ne znaju šta oznaka predstavlja i vide samo neprozirni `ContextId`. Oznaku iz putanje razrešava isključivo `IActivityContextReader`; trenutna implementacija `InMemoryActivityContextReader` je omotač oko `ICourseReader` i vraća `ActivityContext` za kataloški predmet. Kada ST-004 uvede izvođenja predmeta, dovoljno je dodati novi adapter tog porta (npr. `OfferingActivityContextReader`) i promeniti jednu liniju registracije u `Program.cs`; ruta, rukovalac, domen i repozitorijum ostaju nepromenjeni. Port vraća `ActivityContextLookup` sa statusima `Found`, `NotFound`, `Ambiguous` i `Canceled` — bez izuzetaka.
 
 Oznaka se normalizuje: zadržavaju se slova, cifre, `-`, `_` i `.`, svaki drugi znak (razmak, `/` i sl.) zamenjuje se jednom crticom, a vodeće i završne crtice se uklanjaju. Ako oznaka nakon normalizacije ostane prazna, slug sadrži samo `xxxxx`.
 
-Primer zahteva (koristi jedan od demo predmeta iz `DemoData`; `ERS` sa identifikatorom `11111111-1111-1111-1111-111111111111` daje `ERS-11111`):
+Primer zahteva (koristi jedan od demo predmeta iz `DemoData`; `ERS` sa identifikatorom `11111111-1111-1111-1111-111111111111` daje `ERS-11111` kao oznaku konteksta):
 
 ```bash
 curl -X POST http://localhost:5000/Course/ERS-11111/CreateActivity \

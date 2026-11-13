@@ -2,6 +2,7 @@ using Api.Contracts;
 using Application.Activities;
 using Application.Courses;
 using Domain.Activity;
+using Infrastructure.Activities;
 using Infrastructure.Demo;
 using Interface.Repositories;
 
@@ -19,8 +20,8 @@ builder.Services.AddScoped<SearchCoursesHandler>();
 
 // Memorijski adapter mora biti singleton da bi aktivnosti preživele između zahteva.
 builder.Services.AddSingleton<IActivityRepository>(_ => DemoData.CreateActivityRepository());
+builder.Services.AddSingleton<IActivityContextReader, InMemoryActivityContextReader>();
 builder.Services.AddScoped<CreateActivityHandler>();
-builder.Services.AddScoped<ListActivitiesHandler>();
 
 var app = builder.Build();
 
@@ -49,16 +50,17 @@ app.MapGet("/courses", async (
 
 // Demonstracioni tok aktivnosti: memorijski adapter i bez autentifikacije.
 // Ne predstavlja završenu funkcionalnost ST-021 niti proveru prava nad izvođenjem.
-// Oznaka predmeta je oblika OZNAKA-xxxxx, npr. ERS-11111.
-app.MapPost("/Course/{courseSlug}/CreateActivity", async (
-    string courseSlug,
+// Oznaka konteksta je oblika OZNAKA-xxxxx, npr. ERS-11111; razrešava je
+// IActivityContextReader, pa se kasnije može zameniti oznakom izvođenja predmeta.
+app.MapPost("/Course/{contextSlug}/CreateActivity", async (
+    string contextSlug,
     CreateActivityRequest request,
     CreateActivityHandler handler,
     CancellationToken cancellationToken) =>
 {
     var result = await handler.HandleAsync(
         new CreateActivityCommand(
-            courseSlug,
+            contextSlug,
             request.Name,
             request.Description,
             request.StartDate,
@@ -67,9 +69,11 @@ app.MapPost("/Course/{courseSlug}/CreateActivity", async (
 
     return result.Status switch
     {
-        CreateActivityStatus.Created => Results.Created("/ListActivities", result.Activity),
-        CreateActivityStatus.CourseNotFound => Results.Problem(
-            title: "Predmet nije pronađen",
+        CreateActivityStatus.Created => Results.Json(
+            result.Activity,
+            statusCode: StatusCodes.Status201Created),
+        CreateActivityStatus.ContextNotFound => Results.Problem(
+            title: "Predmet ili izvođenje nije pronađeno",
             detail: result.Error,
             statusCode: StatusCodes.Status404NotFound),
         CreateActivityStatus.InvalidRequest => Results.ValidationProblem(
@@ -77,16 +81,13 @@ app.MapPost("/Course/{courseSlug}/CreateActivity", async (
             {
                 ["activity"] = new[] { result.Error ?? "Nevažeći podaci aktivnosti." }
             }),
+        CreateActivityStatus.Conflict => Results.Problem(
+            title: "Aktivnost već postoji",
+            detail: result.Error,
+            statusCode: StatusCodes.Status409Conflict),
+        CreateActivityStatus.Canceled => Results.StatusCode(StatusCodes.Status499ClientClosedRequest),
         _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError)
     };
-});
-
-app.MapGet("/ListActivities", async (
-    ListActivitiesHandler handler,
-    CancellationToken cancellationToken) =>
-{
-    var activities = await handler.HandleAsync(cancellationToken);
-    return Results.Ok(activities);
 });
 
 app.Run();
