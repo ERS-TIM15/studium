@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Interface.Repositories;
-using Domain.Activity;
+using Studium.Domain.Entities;
 
 namespace Application.Teams;
 
@@ -22,7 +22,7 @@ public class TeamService : ITeamService
             return (false, "Tim nije pronađen.");
         }
 
-        bool isLocked = team.LockTeam();
+        bool isLocked = team.LockComposition();
         if (!isLocked)
         {
             return (false, "Tim je već zaključan.");

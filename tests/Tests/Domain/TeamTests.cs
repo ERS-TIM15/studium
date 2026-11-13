@@ -11,6 +11,35 @@ public sealed class TeamTests
     private static readonly Guid Creator = Guid.NewGuid();
 
     [Test]
+    public void LockComposition_ChangesOpenTeamToLocked()
+    {
+        var team = CreateTeam();
+
+        var locked = team.LockComposition();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(locked, Is.True);
+            Assert.That(team.Status, Is.EqualTo(TeamCompositionStatus.Locked));
+        });
+    }
+
+    [Test]
+    public void LockComposition_WhenAlreadyLocked_ReturnsFalseAndKeepsTeamLocked()
+    {
+        var team = CreateTeam();
+        team.LockComposition();
+
+        var locked = team.LockComposition();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(locked, Is.False);
+            Assert.That(team.Status, Is.EqualTo(TeamCompositionStatus.Locked));
+        });
+    }
+
+    [Test]
     public void TryCreate_AssignsProperties()
     {
         var creation = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5);
@@ -110,4 +139,7 @@ public sealed class TeamTests
             Assert.That(creation.Error, Is.Not.Null.And.Not.Empty);
         });
     }
+
+    private static StudentTeam CreateTeam() =>
+        StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
 }

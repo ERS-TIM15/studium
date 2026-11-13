@@ -23,7 +23,7 @@ Tehnički `Infrastructure` referencira `Application`, a `Application` definiše 
 
 ## Šta NIJE pripremljeno
 
-Autentifikacija, autorizacija, baza podataka, migracije, frontend, učitavanje priloga, raspored, predaje, ocenjivanje, kvizovi i ostali poslovni tokovi nisu implementirani. To su delovi studentskog rada. `/health` potvrđuje samo da API proces odgovara, ne stanje buduće baze.
+Autentifikacija, autorizacija, baza podataka, migracije, frontend, učitavanje priloga, raspored, predaje, ocenjivanje, kvizovi i ostali poslovni tokovi nisu implementirani. To su delovi studentskog rada. Zaključavanje koristi domenski model `StudentTeam` i demonstracioni memorijski repozitorijum: podaci se gube pri ponovnom pokretanju, a ruta još ne proverava nastavničko ovlašćenje. Tok kreiranja tima mora sačuvati formirani `StudentTeam` u istom repozitorijumu. `/health` potvrđuje samo da API proces odgovara, ne stanje buduće baze.
 
 ## Primer širenja strukture
 
