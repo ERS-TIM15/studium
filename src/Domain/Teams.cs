@@ -29,7 +29,22 @@ public class StudentTeam
 
     public List<Guid> PendingInvitationStudentIds { get; set; } = new();
 
-    public TeamCompositionStatus Status { get; set; } = TeamCompositionStatus.Open;
+    public TeamCompositionStatus Status { get; private set; } = TeamCompositionStatus.Open;
+
+    /// <summary>
+    /// Zaključava sastav tima kada je tim otvoren. Zaključan tim se ne otključava ovom
+    /// operacijom, pa ponovni poziv ne menja stanje i vraća <c>false</c>.
+    /// </summary>
+    public bool LockComposition()
+    {
+        if (Status == TeamCompositionStatus.Locked)
+        {
+            return false;
+        }
+
+        Status = TeamCompositionStatus.Locked;
+        return true;
+    }
 
     /// <summary>
     /// Predstavnik tima. Dok ne postoji posebna dodela predstavnika, to je student koji je osnovao tim.

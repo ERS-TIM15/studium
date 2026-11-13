@@ -236,6 +236,52 @@ public sealed class TeamTests
         });
     }
 
+    [Test]
+    public void LockComposition_ChangesOpenTeamToLocked()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+
+        var locked = team.LockComposition();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(locked, Is.True);
+            Assert.That(team.Status, Is.EqualTo(TeamCompositionStatus.Locked));
+        });
+    }
+
+    [Test]
+    public void LockComposition_WhenAlreadyLocked_ReturnsFalseAndKeepsTeamLocked()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        team.LockComposition();
+
+        var locked = team.LockComposition();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(locked, Is.False);
+            Assert.That(team.Status, Is.EqualTo(TeamCompositionStatus.Locked));
+        });
+    }
+
+    [Test]
+    public void LockComposition_KeepsInviteOnlySettingAndIsCarriedIntoCopy()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        team.SetInviteOnly(true);
+
+        team.LockComposition();
+        var copy = team.Copy();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(copy.Status, Is.EqualTo(TeamCompositionStatus.Locked));
+            Assert.That(copy.IsInviteOnly, Is.True);
+            Assert.That(copy.IsRepresentative(Creator), Is.True);
+        });
+    }
+
     private static void AssertFailure(TeamCreation creation)
     {
         Assert.Multiple(() =>
