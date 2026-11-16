@@ -31,6 +31,69 @@ public class StudentTeam
 
     public TeamCompositionStatus Status { get; set; } = TeamCompositionStatus.Open;
 
+    /// <summary>
+    /// Predstavnik tima. Dok ne postoji posebna dodela predstavnika, to je student koji je osnovao tim.
+    /// </summary>
+    public Guid RepresentativeStudentId { get; private set; }
+
+    /// <summary>
+    /// Kada je uključeno, timu mogu pristupiti samo studenti koji su u njega pozvani.
+    /// </summary>
+    public bool IsInviteOnly { get; private set; }
+
+    /// <summary>
+    /// Verzija koju je adapter pročitao iz skladišta. Adapter je uvećava pri upisu, pa se
+    /// izmena između čitanja i pisanja prepoznaje kao konflikt, a ne kao tiha zamena stanja.
+    /// </summary>
+    public int Version { get; private set; }
+
+    public bool IsRepresentative(Guid studentId) =>
+        studentId != Guid.Empty && studentId == RepresentativeStudentId;
+
+    /// <summary>
+    /// Nezavisna kopija tima, uključujući liste članova i poziva. Adapteri njome čuvaju i
+    /// vraćaju snimke, pa pozivalac ne može da menja sačuvano stanje kroz svoj objekat.
+    /// </summary>
+    public StudentTeam Copy() => new()
+    {
+        Id = Id,
+        CourseOfferingId = CourseOfferingId,
+        ProjectActivityId = ProjectActivityId,
+        Name = Name,
+        MinSize = MinSize,
+        MaxSize = MaxSize,
+        MemberStudentIds = new List<Guid>(MemberStudentIds),
+        PendingInvitationStudentIds = new List<Guid>(PendingInvitationStudentIds),
+        Status = Status,
+        RepresentativeStudentId = RepresentativeStudentId,
+        IsInviteOnly = IsInviteOnly,
+        Version = Version
+    };
+
+    /// <summary>
+    /// Postavlja verziju pri upisu u skladište; poziva je isključivo adapter.
+    /// </summary>
+    public void MarkStored(int version) => Version = version;
+
+    /// <summary>
+    /// Zatvara tim samo za pozvane studente ili ga ponovo otvara. Postojeći članovi i
+    /// već poslati pozivi ostaju nepromenjeni. Proveru da li je pozivalac predstavnik
+    /// tima vrši slučaj upotrebe.
+    /// </summary>
+    public void SetInviteOnly(bool inviteOnly)
+    {
+        IsInviteOnly = inviteOnly;
+    }
+
+    /// <summary>
+    /// Proverava samo pravilo pristupa: otvoren tim prima svakoga, a tim samo po pozivu
+    /// samo pozvane studente. Ostala pravila pristupanja (zaključan sastav, najveća
+    /// veličina, jedan tim po aktivnosti) pripadaju slučaju upotrebe pristupanja timu,
+    /// koji još nije implementiran.
+    /// </summary>
+    public bool AllowsJoinBy(Guid studentId) =>
+        !IsInviteOnly || PendingInvitationStudentIds.Contains(studentId);
+
     public static TeamCreation TryCreate(
         Guid courseOfferingId,
         Guid projectActivityId,
@@ -78,7 +141,9 @@ public class StudentTeam
             MaxSize = maxSize,
             MemberStudentIds = new List<Guid> { creatorStudentId },
             PendingInvitationStudentIds = new List<Guid>(),
-            Status = TeamCompositionStatus.Open
+            Status = TeamCompositionStatus.Open,
+            RepresentativeStudentId = creatorStudentId,
+            IsInviteOnly = false
         });
     }
 }
