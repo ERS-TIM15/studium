@@ -2,8 +2,8 @@ namespace Application.Teams;
 
 public enum TeacherAccess
 {
-    Allowed,
     Denied,
+    Allowed,
     ActivityNotFound
 }
 
