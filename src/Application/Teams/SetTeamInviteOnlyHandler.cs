@@ -2,7 +2,8 @@ namespace Application.Teams;
 
 /// <summary>
 /// ST-021 (kontrola pristupa): predstavnik tima zatvara tim samo za pozvane studente
-/// ili ga ponovo otvara. Odbijena operacija ne menja tim.
+/// ili ga ponovo otvara. Odbijena operacija ne menja tim, a izmena koju je neko drugi
+/// napravio u međuvremenu se prijavljuje kao konflikt, bez prepisivanja tuđeg stanja.
 /// </summary>
 public sealed class SetTeamInviteOnlyHandler
 {
@@ -28,9 +29,20 @@ public sealed class SetTeamInviteOnlyHandler
             return SetTeamInviteOnlyResult.Forbidden();
         }
 
-        team.SetInviteOnly(command.InviteOnly);
-        await _repository.UpdateAsync(team, cancellationToken);
+        if (team.IsInviteOnly == command.InviteOnly)
+        {
+            return SetTeamInviteOnlyResult.Updated(team.IsInviteOnly);
+        }
 
-        return SetTeamInviteOnlyResult.Updated(team.IsInviteOnly);
+        team.SetInviteOnly(command.InviteOnly);
+
+        var update = await _repository.UpdateAsync(team, cancellationToken);
+
+        return update.Status switch
+        {
+            TeamUpdateStatus.Updated => SetTeamInviteOnlyResult.Updated(team.IsInviteOnly),
+            TeamUpdateStatus.TeamNotFound => SetTeamInviteOnlyResult.TeamNotFound(),
+            _ => SetTeamInviteOnlyResult.Conflict()
+        };
     }
 }

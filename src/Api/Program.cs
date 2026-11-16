@@ -140,6 +140,10 @@ app.MapPut("/teams/{teamId:guid}/invite-only", async (
             title: "Nedovoljno ovlašćenje",
             detail: result.Error,
             statusCode: StatusCodes.Status403Forbidden),
+        SetTeamInviteOnlyStatus.Conflict => Results.Problem(
+            title: "Tim je u međuvremenu izmenjen",
+            detail: result.Error,
+            statusCode: StatusCodes.Status409Conflict),
         _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError)
     };
 });

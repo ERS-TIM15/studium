@@ -50,7 +50,9 @@ curl -X POST http://localhost:5000/Course/ERS-11111/CreateActivity \
 
 ### Delimična ST-021: tim samo po pozivu
 
-`PUT /teams/{teamId}/invite-only` sa telom `{ "inviteOnly": true }` zatvara tim tako da mu mogu pristupiti samo pozvani studenti; `false` ga ponovo otvara. Promenu sme da napravi samo predstavnik tima (student koji je osnovao tim), inače se vraća `403`.
+`PUT /teams/{teamId}/invite-only` sa telom `{ "inviteOnly": true }` zatvara tim tako da mu mogu pristupiti samo pozvani studenti; `false` ga ponovo otvara. Promenu sme da napravi samo predstavnik tima (student koji je osnovao tim), inače se vraća `403`; izostavljeno polje `inviteOnly` daje `400`, a izostavljeno zaglavlje `X-Student-Id` daje `401`.
+
+Memorijski adapter čuva i vraća snimke tima, pa izmene nad pročitanim objektom ne menjaju sačuvano stanje. Ako je tim izmenjen između čitanja i upisa, vraća se `409` umesto prepisivanja tuđe izmene.
 
 **Ograničenja:** identitet se privremeno čita iz zaglavlja `X-Student-Id` dok ne postoji prijava korisnika (ST-002) — to nije bezbednosna kontrola. Timovi se čuvaju u memoriji, a postoji jedan demo tim (`66666666-…`, predstavnik `55555555-…`). Pristupanje timu, slanje i prihvatanje poziva još nisu implementirani; pravilo je spremno u `StudentTeam.AllowsJoinBy` za taj slučaj upotrebe.
 

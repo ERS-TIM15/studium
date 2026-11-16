@@ -4,7 +4,8 @@ public enum SetTeamInviteOnlyStatus
 {
     Updated,
     TeamNotFound,
-    Forbidden
+    Forbidden,
+    Conflict
 }
 
 public sealed record SetTeamInviteOnlyResult(
@@ -23,4 +24,8 @@ public sealed record SetTeamInviteOnlyResult(
     public static SetTeamInviteOnlyResult Forbidden() =>
         new(SetTeamInviteOnlyStatus.Forbidden,
             Error: "Samo predstavnik tima može da promeni ko može da pristupi timu.");
+
+    public static SetTeamInviteOnlyResult Conflict() =>
+        new(SetTeamInviteOnlyStatus.Conflict,
+            Error: "Tim je u međuvremenu izmenjen. Pokušajte ponovo.");
 }
