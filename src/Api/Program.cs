@@ -1,15 +1,39 @@
+using System;
+using Api.Authentication;
 using Api.Contracts;
+using Application.Activities;
 using Application.Courses;
+using Application.Interfaces;
+using Application.Services;
 using Application.Teams;
+using Infrastructure.Activities;
 using Infrastructure.Demo;
+using Infrastructure.Repositories;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Composition root: spoljašnji sloj bira implementaciju ugovora.
+builder.Services.AddControllers();
 builder.Services.AddSingleton<ICourseReader>(_ => DemoData.CreateCourseReader());
 builder.Services.AddScoped<ListCoursesHandler>();
 builder.Services.AddScoped<SearchCoursesHandler>();
+builder.Services.AddSingleton<IEnrollmentRepository>(
+    _ => new EnrollmentRepository(DemoData.CreateEnrollments()));
+builder.Services.AddSingleton<IOfferingAccessReader>(_ => DemoData.CreateOfferingAccessReader());
+builder.Services.AddScoped<EnrollmentService>();
+
+
+builder.Services
+    .AddAuthentication(DemoAuthHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, DemoAuthHandler>(DemoAuthHandler.SchemeName, _ => { });
+builder.Services.AddAuthorization();
+
+// Memorijski adapter mora biti singleton da bi aktivnosti preživele između zahteva.
+builder.Services.AddSingleton<IActivityRepository>(_ => DemoData.CreateActivityRepository());
+builder.Services.AddSingleton<IActivityContextReader, InMemoryActivityContextReader>();
+builder.Services.AddScoped<CreateActivityHandler>();
+builder.Services.AddScoped<ListActivitiesHandler>();
 
 // Memorijski adapter mora biti singleton da bi izmene timova preživele između zahteva.
 builder.Services.AddSingleton<ITeamRepository>(_ => DemoData.CreateTeamRepository());
@@ -19,9 +43,12 @@ builder.Services.AddScoped<InviteStudentToTeamHandler>();
 var app = builder.Build();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.UseAuthentication();
+app.UseAuthorization();
 
-// Javno dostupan demonstracioni endpoint, bez autentifikacije:
-// ne predstavlja funkcionalnost ST-003 i ne koristiti ga za stvarne podatke.
+app.MapControllers();
+
+
 app.MapGet("/demo/courses", async (
     ListCoursesHandler handler,
     CancellationToken cancellationToken) =>
@@ -37,6 +64,59 @@ app.MapGet("/courses", async (
 {
     var courses = await handler.HandleAsync(query, cancellationToken);
     return Results.Ok(courses);
+});
+
+// Demonstracioni tok aktivnosti: memorijski adapter i bez autentifikacije.
+// Ne predstavlja završenu funkcionalnost ST-021 niti proveru prava nad izvođenjem.
+// Oznaka konteksta je oblika OZNAKA-xxxxx, npr. ERS-11111; razrešava je
+// IActivityContextReader, pa se kasnije može zameniti oznakom izvođenja predmeta.
+app.MapPost("/Course/{contextSlug}/CreateActivity", async (
+    string contextSlug,
+    CreateActivityRequest request,
+    CreateActivityHandler handler,
+    CancellationToken cancellationToken) =>
+{
+    var result = await handler.HandleAsync(
+        new CreateActivityCommand(
+            contextSlug,
+            request.Name,
+            request.Description,
+            request.StartDate,
+            request.EndDate),
+        cancellationToken);
+
+    return result.Status switch
+    {
+        CreateActivityStatus.Created => Results.Json(
+            result.Activity,
+            statusCode: StatusCodes.Status201Created),
+        CreateActivityStatus.ContextNotFound => Results.Problem(
+            title: "Predmet ili izvođenje nije pronađeno",
+            detail: result.Error,
+            statusCode: StatusCodes.Status404NotFound),
+        CreateActivityStatus.InvalidRequest => Results.ValidationProblem(
+            new Dictionary<string, string[]>
+            {
+                ["activity"] = new[] { result.Error ?? "Nevažeći podaci aktivnosti." }
+            }),
+        CreateActivityStatus.Conflict => Results.Problem(
+            title: "Aktivnost već postoji",
+            detail: result.Error,
+            statusCode: StatusCodes.Status409Conflict),
+        CreateActivityStatus.Canceled => Results.StatusCode(StatusCodes.Status499ClientClosedRequest),
+        _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError)
+    };
+});
+
+app.MapGet("/ListActivities", async (
+    ListActivitiesHandler handler,
+    CancellationToken cancellationToken) =>
+{
+    var result = await handler.HandleAsync(cancellationToken);
+
+    return result.IsSuccess
+        ? Results.Ok(result.Activities)
+        : Results.StatusCode(StatusCodes.Status499ClientClosedRequest);
 });
 
 // ST-021 (kontrola pristupa): predstavnik tima zatvara tim samo za pozvane studente
@@ -80,6 +160,10 @@ app.MapPut("/teams/{teamId:guid}/invite-only", async (
             title: "Nedovoljno ovlašćenje",
             detail: result.Error,
             statusCode: StatusCodes.Status403Forbidden),
+        SetTeamInviteOnlyStatus.Conflict => Results.Problem(
+            title: "Tim je u međuvremenu izmenjen",
+            detail: result.Error,
+            statusCode: StatusCodes.Status409Conflict),
         _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError)
     };
 });
@@ -132,8 +216,15 @@ app.MapPost("/teams/{teamId:guid}/invitations", async (
             title: "Neuspešno slanje poziva",
             detail: result.Error,
             statusCode: StatusCodes.Status409Conflict),
+        InviteStudentToTeamStatus.Conflict => Results.Problem(
+            title: "Tim je u međuvremenu izmenjen",
+            detail: result.Error,
+            statusCode: StatusCodes.Status409Conflict),
         _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError)
     };
 });
 
 app.Run();
+
+// Potrebno za WebApplicationFactory u integracionim testovima.
+public partial class Program { }

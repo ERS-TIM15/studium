@@ -25,7 +25,7 @@ public sealed class InviteStudentToTeamHandlerTests
         _repository.Setup(x => x.GetByIdAsync(_team.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(_team);
         _repository.Setup(x => x.UpdateAsync(It.IsAny<StudentTeam>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(TeamUpdateResult.Updated());
 
         _handler = new InviteStudentToTeamHandler(_repository.Object);
     }
@@ -210,5 +210,17 @@ public sealed class InviteStudentToTeamHandlerTests
             Assert.That(_team.PendingInvitationStudentIds, Is.Empty);
         });
         _repository.Verify(x => x.UpdateAsync(It.IsAny<StudentTeam>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+    [Test]
+    public async Task HandleAsync_ReportsConflictWhenTeamChangedAfterRead()
+    {
+        _repository.Setup(x => x.UpdateAsync(It.IsAny<StudentTeam>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(TeamUpdateResult.Conflict());
+        var candidate = Guid.NewGuid();
+
+        var result = await _handler.HandleAsync(
+            new InviteStudentToTeamCommand(_team.Id, Member, candidate));
+
+        Assert.That(result.Status, Is.EqualTo(InviteStudentToTeamStatus.Conflict));
     }
 }

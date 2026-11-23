@@ -326,6 +326,52 @@ public sealed class TeamTests
         Assert.That(team.AllowsJoinBy(candidate), Is.True);
     }
 
+    [Test]
+    public void Copy_IsIndependentSnapshot()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        var invited = Guid.NewGuid();
+        team.PendingInvitationStudentIds.Add(invited);
+        team.SetInviteOnly(true);
+        team.MarkStored(7);
+
+        var copy = team.Copy();
+
+        copy.SetInviteOnly(false);
+        copy.MemberStudentIds.Add(Guid.NewGuid());
+        copy.PendingInvitationStudentIds.Clear();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(copy.Id, Is.EqualTo(team.Id));
+            Assert.That(copy.Version, Is.EqualTo(7));
+            Assert.That(copy.MemberStudentIds, Is.Not.SameAs(team.MemberStudentIds));
+            Assert.That(copy.PendingInvitationStudentIds, Is.Not.SameAs(team.PendingInvitationStudentIds));
+            Assert.That(team.IsInviteOnly, Is.True);
+            Assert.That(team.MemberStudentIds, Has.Count.EqualTo(1));
+            Assert.That(team.PendingInvitationStudentIds, Does.Contain(invited));
+        });
+    }
+
+    [Test]
+    public void Copy_CarriesInvitationsAndMembership()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        var invited = Guid.NewGuid();
+        team.PendingInvitationStudentIds.Add(invited);
+
+        var copy = team.Copy();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(copy.MemberStudentIds, Has.Count.EqualTo(1));
+            Assert.That(copy.MemberStudentIds, Does.Contain(Creator));
+            Assert.That(copy.PendingInvitationStudentIds, Does.Contain(invited));
+            Assert.That(copy.RepresentativeStudentId, Is.EqualTo(Creator));
+            Assert.That(copy.IsRepresentative(Creator), Is.True);
+        });
+    }
+
     private static void AssertFailure(TeamCreation creation)
     {
         Assert.Multiple(() =>

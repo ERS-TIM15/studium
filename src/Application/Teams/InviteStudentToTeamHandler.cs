@@ -71,8 +71,13 @@ public sealed class InviteStudentToTeamHandler
             return InviteStudentToTeamResult.InvalidStudent("Slanje poziva nije uspelo.");
         }
 
-        await _repository.UpdateAsync(team, cancellationToken);
+        var update = await _repository.UpdateAsync(team, cancellationToken);
 
-        return InviteStudentToTeamResult.Success(command.InvitedStudentId);
+        return update.Status switch
+        {
+            TeamUpdateStatus.Updated => InviteStudentToTeamResult.Success(command.InvitedStudentId),
+            TeamUpdateStatus.TeamNotFound => InviteStudentToTeamResult.TeamNotFound(),
+            _ => InviteStudentToTeamResult.Conflict()
+        };
     }
 }

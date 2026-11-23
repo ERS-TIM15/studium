@@ -41,8 +41,39 @@ public class StudentTeam
     /// </summary>
     public bool IsInviteOnly { get; private set; }
 
+    /// <summary>
+    /// Verzija koju je adapter pročitao iz skladišta. Adapter je uvećava pri upisu, pa se
+    /// izmena između čitanja i pisanja prepoznaje kao konflikt, a ne kao tiha zamena stanja.
+    /// </summary>
+    public int Version { get; private set; }
+
     public bool IsRepresentative(Guid studentId) =>
         studentId != Guid.Empty && studentId == RepresentativeStudentId;
+
+    /// <summary>
+    /// Nezavisna kopija tima, uključujući liste članova i poziva. Adapteri njome čuvaju i
+    /// vraćaju snimke, pa pozivalac ne može da menja sačuvano stanje kroz svoj objekat.
+    /// </summary>
+    public StudentTeam Copy() => new()
+    {
+        Id = Id,
+        CourseOfferingId = CourseOfferingId,
+        ProjectActivityId = ProjectActivityId,
+        Name = Name,
+        MinSize = MinSize,
+        MaxSize = MaxSize,
+        MemberStudentIds = new List<Guid>(MemberStudentIds),
+        PendingInvitationStudentIds = new List<Guid>(PendingInvitationStudentIds),
+        Status = Status,
+        RepresentativeStudentId = RepresentativeStudentId,
+        IsInviteOnly = IsInviteOnly,
+        Version = Version
+    };
+
+    /// <summary>
+    /// Postavlja verziju pri upisu u skladište; poziva je isključivo adapter.
+    /// </summary>
+    public void MarkStored(int version) => Version = version;
 
     /// <summary>
     /// Zatvara tim samo za pozvane studente ili ga ponovo otvara. Postojeći članovi i

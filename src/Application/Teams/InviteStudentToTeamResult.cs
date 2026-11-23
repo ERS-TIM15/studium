@@ -9,7 +9,8 @@ public enum InviteStudentToTeamStatus
     AlreadyInvited,
     TeamLocked,
     TeamFull,
-    InvalidStudent
+    InvalidStudent,
+    Conflict
 }
 
 public sealed record InviteStudentToTeamResult(
@@ -47,4 +48,8 @@ public sealed record InviteStudentToTeamResult(
 
     public static InviteStudentToTeamResult InvalidStudent(string message = "Identifikator studenta nije validan.") =>
         new(InviteStudentToTeamStatus.InvalidStudent, Error: message);
+
+    public static InviteStudentToTeamResult Conflict() =>
+        new(InviteStudentToTeamStatus.Conflict,
+            Error: "Tim je u međuvremenu izmenjen. Pokušajte ponovo.");
 }
