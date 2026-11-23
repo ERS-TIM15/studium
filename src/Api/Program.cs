@@ -1,17 +1,33 @@
+using System;
+using Api.Authentication;
 using Api.Contracts;
 using Application.Activities;
 using Application.Courses;
+using Application.Interfaces;
+using Application.Services;
 using Application.Teams;
 using Infrastructure.Activities;
 using Infrastructure.Demo;
+using Infrastructure.Repositories;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Composition root: spoljašnji sloj bira implementaciju ugovora.
+builder.Services.AddControllers();
 builder.Services.AddSingleton<ICourseReader>(_ => DemoData.CreateCourseReader());
 builder.Services.AddScoped<ListCoursesHandler>();
 builder.Services.AddScoped<SearchCoursesHandler>();
+builder.Services.AddSingleton<IEnrollmentRepository>(
+    _ => new EnrollmentRepository(DemoData.CreateEnrollments()));
+builder.Services.AddSingleton<IOfferingAccessReader>(_ => DemoData.CreateOfferingAccessReader());
+builder.Services.AddScoped<EnrollmentService>();
+
+
+builder.Services
+    .AddAuthentication(DemoAuthHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, DemoAuthHandler>(DemoAuthHandler.SchemeName, _ => { });
+builder.Services.AddAuthorization();
 
 // Memorijski adapter mora biti singleton da bi aktivnosti preživele između zahteva.
 builder.Services.AddSingleton<IActivityRepository>(_ => DemoData.CreateActivityRepository());
@@ -26,9 +42,12 @@ builder.Services.AddScoped<SetTeamInviteOnlyHandler>();
 var app = builder.Build();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.UseAuthentication();
+app.UseAuthorization();
 
-// Javno dostupan demonstracioni endpoint, bez autentifikacije:
-// ne predstavlja funkcionalnost ST-003 i ne koristiti ga za stvarne podatke.
+app.MapControllers();
+
+
 app.MapGet("/demo/courses", async (
     ListCoursesHandler handler,
     CancellationToken cancellationToken) =>
@@ -151,6 +170,4 @@ app.MapPut("/teams/{teamId:guid}/invite-only", async (
 app.Run();
 
 // Potrebno za WebApplicationFactory u integracionim testovima.
-public partial class Program
-{
-}
+public partial class Program { }
