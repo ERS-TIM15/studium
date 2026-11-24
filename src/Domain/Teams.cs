@@ -1,3 +1,5 @@
+using System.Collections.ObjectModel;
+
 namespace Studium.Domain.Entities;
 
 public enum TeamCompositionStatus
@@ -10,89 +12,49 @@ public enum TeamCompositionStatus
 /// Tim studenata vezan za izvođenje predmeta i projektnu aktivnost.
 /// Neispravni podaci se ne signaliziraju izuzetkom, već rezultatom
 /// <see cref="TeamCreation"/>.
+/// Stanje tima se menja samo kroz domenske operacije: sva svojstva imaju privatan
+/// seter, a liste članova i poziva se izlažu samo kao kolekcije samo za čitanje.
 /// </summary>
 public class StudentTeam
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    private readonly List<Guid> _memberStudentIds = new();
+    private readonly List<Guid> _pendingInvitationStudentIds = new();
+    private readonly ReadOnlyCollection<Guid> _memberStudentIdsView;
+    private readonly ReadOnlyCollection<Guid> _pendingInvitationStudentIdsView;
 
-    public Guid CourseOfferingId { get; set; }
-
-    public Guid ProjectActivityId { get; set; }
-
-    public string Name { get; set; } = string.Empty;
-
-    public int MinSize { get; set; }
-
-    public int MaxSize { get; set; }
-
-    public List<Guid> MemberStudentIds { get; set; } = new();
-
-    public List<Guid> PendingInvitationStudentIds { get; set; } = new();
-
-    public TeamCompositionStatus Status { get; set; } = TeamCompositionStatus.Open;
-
-    /// <summary>
-    /// Predstavnik tima. Dok ne postoji posebna dodela predstavnika, to je student koji je osnovao tim.
-    /// </summary>
-    public Guid RepresentativeStudentId { get; private set; }
-
-    /// <summary>
-    /// Kada je uključeno, timu mogu pristupiti samo studenti koji su u njega pozvani.
-    /// </summary>
-    public bool IsInviteOnly { get; private set; }
-
-    /// <summary>
-    /// Verzija koju je adapter pročitao iz skladišta. Adapter je uvećava pri upisu, pa se
-    /// izmena između čitanja i pisanja prepoznaje kao konflikt, a ne kao tiha zamena stanja.
-    /// </summary>
-    public int Version { get; private set; }
-
-    public bool IsRepresentative(Guid studentId) =>
-        studentId != Guid.Empty && studentId == RepresentativeStudentId;
-
-    /// <summary>
-    /// Nezavisna kopija tima, uključujući liste članova i poziva. Adapteri njome čuvaju i
-    /// vraćaju snimke, pa pozivalac ne može da menja sačuvano stanje kroz svoj objekat.
-    /// </summary>
-    public StudentTeam Copy() => new()
+    private StudentTeam()
     {
-        Id = Id,
-        CourseOfferingId = CourseOfferingId,
-        ProjectActivityId = ProjectActivityId,
-        Name = Name,
-        MinSize = MinSize,
-        MaxSize = MaxSize,
-        MemberStudentIds = new List<Guid>(MemberStudentIds),
-        PendingInvitationStudentIds = new List<Guid>(PendingInvitationStudentIds),
-        Status = Status,
-        RepresentativeStudentId = RepresentativeStudentId,
-        IsInviteOnly = IsInviteOnly,
-        Version = Version
-    };
-
-    /// <summary>
-    /// Postavlja verziju pri upisu u skladište; poziva je isključivo adapter.
-    /// </summary>
-    public void MarkStored(int version) => Version = version;
-
-    /// <summary>
-    /// Zatvara tim samo za pozvane studente ili ga ponovo otvara. Postojeći članovi i
-    /// već poslati pozivi ostaju nepromenjeni. Proveru da li je pozivalac predstavnik
-    /// tima vrši slučaj upotrebe.
-    /// </summary>
-    public void SetInviteOnly(bool inviteOnly)
-    {
-        IsInviteOnly = inviteOnly;
+        _memberStudentIdsView = _memberStudentIds.AsReadOnly();
+        _pendingInvitationStudentIdsView = _pendingInvitationStudentIds.AsReadOnly();
     }
 
     /// <summary>
-    /// Proverava samo pravilo pristupa: otvoren tim prima svakoga, a tim samo po pozivu
-    /// samo pozvane studente. Ostala pravila pristupanja (zaključan sastav, najveća
-    /// veličina, jedan tim po aktivnosti) pripadaju slučaju upotrebe pristupanja timu,
-    /// koji još nije implementiran.
+    /// Identifikator tima. Dodeljuje se pri kreiranju i posle se ne menja.
     /// </summary>
-    public bool AllowsJoinBy(Guid studentId) =>
-        !IsInviteOnly || PendingInvitationStudentIds.Contains(studentId);
+    public Guid Id { get; private set; } = Guid.NewGuid();
+
+    public Guid CourseOfferingId { get; private set; }
+
+    public Guid ProjectActivityId { get; private set; }
+
+    public string Name { get; private set; } = string.Empty;
+
+    public int MinSize { get; private set; }
+
+    public int MaxSize { get; private set; }
+
+    /// <summary>
+    /// Članovi tima, uključujući tvorca. Kolekcija je samo za čitanje; članstvo se menja
+    /// isključivo domenskim operacijama koje poštuju pravila tima.
+    /// </summary>
+    public IReadOnlyCollection<Guid> MemberStudentIds => _memberStudentIdsView;
+
+    /// <summary>
+    /// Studenti koji su pozvani u tim, a još nisu članovi. Kolekcija je samo za čitanje.
+    /// </summary>
+    public IReadOnlyCollection<Guid> PendingInvitationStudentIds => _pendingInvitationStudentIdsView;
+
+    public TeamCompositionStatus Status { get; private set; } = TeamCompositionStatus.Open;
 
     public static TeamCreation TryCreate(
         Guid courseOfferingId,
@@ -132,18 +94,17 @@ public class StudentTeam
             return TeamCreation.Failure("Najveći broj članova tima ne sme biti manji od najmanjeg");
         }
 
-        return TeamCreation.Success(new StudentTeam
+        var team = new StudentTeam
         {
             CourseOfferingId = courseOfferingId,
             ProjectActivityId = projectActivityId,
             Name = name.Trim(),
             MinSize = minSize,
             MaxSize = maxSize,
-            MemberStudentIds = new List<Guid> { creatorStudentId },
-            PendingInvitationStudentIds = new List<Guid>(),
-            Status = TeamCompositionStatus.Open,
-            RepresentativeStudentId = creatorStudentId,
-            IsInviteOnly = false
-        });
+            Status = TeamCompositionStatus.Open
+        };
+        team._memberStudentIds.Add(creatorStudentId);
+
+        return TeamCreation.Success(team);
     }
 }
