@@ -74,13 +74,14 @@ public sealed class SetTeamInviteOnlyHandlerTests
     }
 
     [Test]
-    public async Task HandleAsync_RejectsTeamMemberWhoIsNotRepresentative()
+    public async Task HandleAsync_RejectsStudentWhoIsNotRepresentative()
     {
-        var otherMember = Guid.NewGuid();
-        _team.MemberStudentIds.Add(otherMember);
+        // Članstvo se zadaje samo pri kreiranju tima; tok prihvatanja poziva još nije
+        // implementiran, pa se ovde proverava student koji nije predstavnik tima.
+        var otherStudent = Guid.NewGuid();
 
         var result = await _handler.HandleAsync(
-            new SetTeamInviteOnlyCommand(_team.Id, otherMember, InviteOnly: true));
+            new SetTeamInviteOnlyCommand(_team.Id, otherStudent, InviteOnly: true));
 
         Assert.Multiple(() =>
         {

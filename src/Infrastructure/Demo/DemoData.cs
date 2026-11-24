@@ -29,8 +29,8 @@ public static class DemoData
             name: "Demo tim",
             creatorStudentId: DemoTeamRepresentativeId,
             minSize: 4,
-            maxSize: 6).Team!;
-        team.Id = DemoTeamId;
+            maxSize: 6,
+            teamId: DemoTeamId).Team!;
 
         return new InMemoryTeamRepository(new[] { team });
     }

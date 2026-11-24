@@ -53,8 +53,7 @@ public sealed class InMemoryTeamRepositoryTests
     {
         var team = CreateTeam();
         var repository = new InMemoryTeamRepository(new[] { team });
-        var updated = CreateTeam();
-        updated.Id = team.Id;
+        var updated = CreateTeam(team.Id);
         updated.SetInviteOnly(true);
 
         var result = await repository.UpdateAsync(updated);
@@ -72,8 +71,7 @@ public sealed class InMemoryTeamRepositoryTests
     {
         var team = CreateTeam();
         var repository = new InMemoryTeamRepository(new[] { team });
-        var updated = CreateTeam();
-        updated.Id = team.Id;
+        var updated = CreateTeam(team.Id);
         updated.SetInviteOnly(true);
 
         await repository.UpdateAsync(updated);
@@ -120,6 +118,6 @@ public sealed class InMemoryTeamRepositoryTests
         Assert.That(result.Status, Is.EqualTo(TeamUpdateStatus.TeamNotFound));
     }
 
-    private static StudentTeam CreateTeam() =>
-        StudentTeam.TryCreate(Guid.NewGuid(), Guid.NewGuid(), "Tim A", Guid.NewGuid(), 2, 5).Team!;
+    private static StudentTeam CreateTeam(Guid? teamId = null) =>
+        StudentTeam.TryCreate(Guid.NewGuid(), Guid.NewGuid(), "Tim A", Guid.NewGuid(), 2, 5, teamId).Team!;
 }
