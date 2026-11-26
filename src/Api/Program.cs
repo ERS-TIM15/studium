@@ -127,7 +127,7 @@ builder.Services.AddScoped<SetTeamInviteOnlyHandler>();
 builder.Services.AddSingleton<IMaterialRepository, InMemoryMaterialRepository>();
 builder.Services.AddScoped<CreateMaterialHandler>();
 // ST-005 još nije integrisan: privremeni adapter bez angažovanja odbija sve (403).
-builder.Services.AddSingleton<IOfferingStaffChecker>(_ => new InMemoryOfferingStaffChecker());
+builder.Services.AddSingleton<IOfferingStaffChecker>(_ => DemoData.CreateOfferingStaffChecker());
 
 // ST-009 (US-05): dozvoljeni tipovi i maksimalna veličina priloga iz konfiguracije.
 // Nedostajuća ili neispravna konfiguracija zaustavlja pokretanje umesto da prihvati sve.
@@ -221,19 +221,30 @@ app.MapGet("/courses", async (
 // Ne predstavlja završenu funkcionalnost ST-021 niti proveru prava nad izvođenjem.
 // Oznaka konteksta je oblika OZNAKA-xxxxx, npr. ERS-11111; razrešava je
 // IActivityContextReader, pa se kasnije može zameniti oznakom izvođenja predmeta.
+// ST-021: aktivnost kreira samo nastavno osoblje izvođenja. Identitet dolazi isključivo
+// iz sesije (US-7.5); nema zaglavlja koje klijent bira.
 app.MapPost("/Course/{contextSlug}/CreateActivity", async (
     string contextSlug,
     CreateActivityRequest request,
+    ClaimsPrincipal user,
     CreateActivityHandler handler,
     CancellationToken cancellationToken) =>
 {
+    if (!user.TryGetSessionUserId(out var requestingUserId))
+    {
+        return Results.Problem(
+            title: "Korisnik nije prijavljen",
+            statusCode: StatusCodes.Status401Unauthorized);
+    }
+
     var result = await handler.HandleAsync(
         new CreateActivityCommand(
             contextSlug,
             request.Name,
             request.Description,
             request.StartDate,
-            request.EndDate),
+            request.EndDate,
+            requestingUserId),
         cancellationToken);
 
     return result.Status switch
@@ -254,10 +265,14 @@ app.MapPost("/Course/{contextSlug}/CreateActivity", async (
             title: "Aktivnost već postoji",
             detail: result.Error,
             statusCode: StatusCodes.Status409Conflict),
+        CreateActivityStatus.Forbidden => Results.Problem(
+            title: "Nedovoljno ovlašćenje",
+            detail: result.Error,
+            statusCode: StatusCodes.Status403Forbidden),
         CreateActivityStatus.Canceled => Results.StatusCode(StatusCodes.Status499ClientClosedRequest),
         _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError)
     };
-});
+}).RequireAuthorization(SessionOnlyPolicy);
 
 app.MapGet("/ListActivities", async (
     ListActivitiesHandler handler,
@@ -268,20 +283,19 @@ app.MapGet("/ListActivities", async (
     return result.IsSuccess
         ? Results.Ok(result.Activities)
         : Results.StatusCode(StatusCodes.Status499ClientClosedRequest);
-});
+}).RequireAuthorization(SessionOnlyPolicy);
 
 // ST-021 (kontrola pristupa): predstavnik tima zatvara tim samo za pozvane studente
-// ili ga ponovo otvara.
-// PRIVREMENO: dok ne postoji prijava korisnika (ST-002), identitet se čita iz zaglavlja
-// X-Student-Id. To NIJE bezbednosna kontrola i mora se zameniti identitetom iz prijave.
+// ili ga ponovo otvara. Identitet dolazi isključivo iz sesije (US-7.5), a ne iz
+// zaglavlja koje klijent bira.
 app.MapPut("/teams/{teamId:guid}/invite-only", async (
     Guid teamId,
-    [FromHeader(Name = "X-Student-Id")] Guid? studentId,
+    ClaimsPrincipal user,
     SetTeamInviteOnlyRequest request,
     SetTeamInviteOnlyHandler handler,
     CancellationToken cancellationToken) =>
 {
-    if (studentId is null)
+    if (!user.TryGetSessionUserId(out var studentId))
     {
         return Results.Problem(
             title: "Korisnik nije prijavljen",
@@ -297,7 +311,7 @@ app.MapPut("/teams/{teamId:guid}/invite-only", async (
     }
 
     var result = await handler.HandleAsync(
-        new SetTeamInviteOnlyCommand(teamId, studentId.Value, request.InviteOnly.Value),
+        new SetTeamInviteOnlyCommand(teamId, studentId, request.InviteOnly.Value),
         cancellationToken);
 
     return result.Status switch
@@ -317,7 +331,7 @@ app.MapPut("/teams/{teamId:guid}/invite-only", async (
             statusCode: StatusCodes.Status409Conflict),
         _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError)
     };
-});
+}).RequireAuthorization(SessionOnlyPolicy);
 
 // ST-007: endpointi početnog pregleda (US-7.1, 7.2, 7.4, 7.5, 7.6, 7.10) su u src/Api/Home/HomeEndpoints.cs.
 app.MapHomeEndpoints();

@@ -1,4 +1,5 @@
 using Application.Activities;
+using Application.Materials;
 using Domain.Activity;
 using Moq;
 using NUnit.Framework;
@@ -9,6 +10,7 @@ namespace Tests.Application;
 public sealed class CreateActivityHandlerTests
 {
     private static readonly Guid ContextId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+    private static readonly Guid ActorId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000002");
     private const string ContextSlug = "ERS-11111";
     private static readonly DateTime Start = new(2026, 3, 1, 8, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime End = new(2026, 3, 15, 23, 59, 0, DateTimeKind.Utc);
@@ -16,7 +18,7 @@ public sealed class CreateActivityHandlerTests
     private static CreateActivityCommand Command(
         string contextSlug = ContextSlug,
         string name = "Timski projekat") =>
-        new(contextSlug, name, "Prva faza", Start, End);
+        new(contextSlug, name, "Prva faza", Start, End, ActorId);
 
     private static Mock<IActivityContextReader> ContextReaderReturning(ActivityContextLookup lookup)
     {
@@ -28,6 +30,15 @@ public sealed class CreateActivityHandlerTests
 
     private static Mock<IActivityContextReader> ExistingContext() =>
         ContextReaderReturning(ActivityContextLookup.Found(new ActivityContext(ContextId)));
+
+    private static Mock<IOfferingStaffChecker> StaffOnTheOffering()
+    {
+        var checker = new Mock<IOfferingStaffChecker>();
+        checker.Setup(x => x.IsStaffOnOfferingAsync(
+                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        return checker;
+    }
 
     private static Mock<IActivityRepository> RepositoryReturning(ActivityAddResult outcome)
     {
@@ -46,7 +57,7 @@ public sealed class CreateActivityHandlerTests
             .Callback<Activity?, CancellationToken>((activity, _) => stored = activity)
             .ReturnsAsync(ActivityAddResult.Added());
 
-        var handler = new CreateActivityHandler(repository.Object, ExistingContext().Object);
+        var handler = new CreateActivityHandler(repository.Object, ExistingContext().Object, StaffOnTheOffering().Object);
 
         var result = await handler.HandleAsync(Command());
 
@@ -72,7 +83,8 @@ public sealed class CreateActivityHandlerTests
         var handler = new CreateActivityHandler(
             repository.Object,
             ContextReaderReturning(ActivityContextLookup.NotFound(
-                $"Kontekst \"{ContextSlug}\" nije pronađen.")).Object);
+                $"Kontekst \"{ContextSlug}\" nije pronađen.")).Object,
+            StaffOnTheOffering().Object);
 
         var result = await handler.HandleAsync(Command());
 
@@ -91,7 +103,7 @@ public sealed class CreateActivityHandlerTests
     public async Task HandleAsync_ReturnsInvalidRequestWhenDomainValidationFails()
     {
         var repository = new Mock<IActivityRepository>();
-        var handler = new CreateActivityHandler(repository.Object, ExistingContext().Object);
+        var handler = new CreateActivityHandler(repository.Object, ExistingContext().Object, StaffOnTheOffering().Object);
 
         var result = await handler.HandleAsync(Command(name: " "));
 
@@ -110,10 +122,10 @@ public sealed class CreateActivityHandlerTests
     public async Task HandleAsync_ReturnsInvalidRequestWhenIntervalIsReversed()
     {
         var repository = new Mock<IActivityRepository>();
-        var handler = new CreateActivityHandler(repository.Object, ExistingContext().Object);
+        var handler = new CreateActivityHandler(repository.Object, ExistingContext().Object, StaffOnTheOffering().Object);
 
         var result = await handler.HandleAsync(new CreateActivityCommand(
-            ContextSlug, "Aktivnost", "Opis", End, Start));
+            ContextSlug, "Aktivnost", "Opis", End, Start, ActorId));
 
         Assert.That(result.Status, Is.EqualTo(CreateActivityStatus.InvalidRequest));
         repository.Verify(
@@ -125,7 +137,7 @@ public sealed class CreateActivityHandlerTests
     public async Task HandleAsync_ReturnsConflictWhenStoreReportsDuplicateId()
     {
         var repository = RepositoryReturning(ActivityAddResult.DuplicateId());
-        var handler = new CreateActivityHandler(repository.Object, ExistingContext().Object);
+        var handler = new CreateActivityHandler(repository.Object, ExistingContext().Object, StaffOnTheOffering().Object);
 
         var result = await handler.HandleAsync(Command());
 
@@ -141,7 +153,7 @@ public sealed class CreateActivityHandlerTests
     public async Task HandleAsync_ReturnsCanceledWhenStoreCancelsTheOperation()
     {
         var repository = RepositoryReturning(ActivityAddResult.Canceled());
-        var handler = new CreateActivityHandler(repository.Object, ExistingContext().Object);
+        var handler = new CreateActivityHandler(repository.Object, ExistingContext().Object, StaffOnTheOffering().Object);
 
         var result = await handler.HandleAsync(Command());
 
@@ -156,7 +168,7 @@ public sealed class CreateActivityHandlerTests
     public async Task HandleAsync_ReturnsInvalidRequestWhenStoreRejectsActivity()
     {
         var repository = RepositoryReturning(ActivityAddResult.InvalidActivity());
-        var handler = new CreateActivityHandler(repository.Object, ExistingContext().Object);
+        var handler = new CreateActivityHandler(repository.Object, ExistingContext().Object, StaffOnTheOffering().Object);
 
         var result = await handler.HandleAsync(Command());
 
@@ -168,7 +180,7 @@ public sealed class CreateActivityHandlerTests
     {
         var repository = RepositoryReturning(ActivityAddResult.Added());
         var reader = ExistingContext();
-        var handler = new CreateActivityHandler(repository.Object, reader.Object);
+        var handler = new CreateActivityHandler(repository.Object, reader.Object, StaffOnTheOffering().Object);
         using var source = new CancellationTokenSource();
 
         await handler.HandleAsync(Command(), source.Token);
@@ -182,7 +194,7 @@ public sealed class CreateActivityHandlerTests
     {
         var repository = RepositoryReturning(ActivityAddResult.Added());
         var reader = ExistingContext();
-        var handler = new CreateActivityHandler(repository.Object, reader.Object);
+        var handler = new CreateActivityHandler(repository.Object, reader.Object, StaffOnTheOffering().Object);
 
         var result = await handler.HandleAsync(Command("ers-11111"));
 
@@ -196,7 +208,8 @@ public sealed class CreateActivityHandlerTests
         var repository = new Mock<IActivityRepository>();
         var handler = new CreateActivityHandler(
             repository.Object,
-            ContextReaderReturning(ActivityContextLookup.Canceled()).Object);
+            ContextReaderReturning(ActivityContextLookup.Canceled()).Object,
+            StaffOnTheOffering().Object);
 
         var result = await handler.HandleAsync(Command());
 
@@ -213,7 +226,8 @@ public sealed class CreateActivityHandlerTests
         var handler = new CreateActivityHandler(
             repository.Object,
             ContextReaderReturning(ActivityContextLookup.Ambiguous(
-                $"Oznaka \"{ContextSlug}\" nije jedinstvena.")).Object);
+                $"Oznaka \"{ContextSlug}\" nije jedinstvena.")).Object,
+            StaffOnTheOffering().Object);
 
         var result = await handler.HandleAsync(Command());
 
@@ -221,6 +235,28 @@ public sealed class CreateActivityHandlerTests
         {
             Assert.That(result.Status, Is.EqualTo(CreateActivityStatus.InvalidRequest));
             Assert.That(result.Error, Does.Contain(ContextSlug));
+        });
+        repository.Verify(
+            x => x.AddAsync(It.IsAny<Activity>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task HandleAsync_ReturnsForbiddenWhenUserIsNotStaffOnTheOffering()
+    {
+        var repository = new Mock<IActivityRepository>();
+        var checker = new Mock<IOfferingStaffChecker>();
+        checker.Setup(x => x.IsStaffOnOfferingAsync(
+                ActorId, ContextId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var handler = new CreateActivityHandler(repository.Object, ExistingContext().Object, checker.Object);
+
+        var result = await handler.HandleAsync(Command());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(CreateActivityStatus.Forbidden));
+            Assert.That(result.Error, Is.Not.Null.And.Not.Empty);
         });
         repository.Verify(
             x => x.AddAsync(It.IsAny<Activity>(), It.IsAny<CancellationToken>()),

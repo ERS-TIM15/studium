@@ -1,3 +1,4 @@
+using Application.Materials;
 using Domain.Activity;
 
 namespace Application.Activities;
@@ -13,13 +14,16 @@ public sealed class CreateActivityHandler
 {
     private readonly IActivityRepository _repository;
     private readonly IActivityContextReader _contextReader;
+    private readonly IOfferingStaffChecker _staffChecker;
 
     public CreateActivityHandler(
         IActivityRepository repository,
-        IActivityContextReader contextReader)
+        IActivityContextReader contextReader,
+        IOfferingStaffChecker staffChecker)
     {
         _repository = repository;
         _contextReader = contextReader;
+        _staffChecker = staffChecker;
     }
 
     public async Task<CreateActivityResult> HandleAsync(
@@ -39,6 +43,14 @@ public sealed class CreateActivityHandler
                 _ => CreateActivityResult.InvalidRequest(
                     lookup.Error ?? $"Oznaka konteksta \"{command.ContextSlug}\" nije jedinstvena.")
             };
+        }
+
+        if (!await _staffChecker.IsStaffOnOfferingAsync(
+                command.RequestingUserId,
+                lookup.Context!.Id,
+                cancellationToken))
+        {
+            return CreateActivityResult.Forbidden();
         }
 
         var creation = Activity.TryCreate(

@@ -65,7 +65,7 @@ public sealed class ListActivitiesEndpointTests
     public async Task GetListActivities_WhenThereAreNoActivities_ReturnsEmptyArray()
     {
         using var factory = CreateFactory();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateForTeacher(factory);
 
         var response = await client.GetAsync(ListActivitiesPath);
 
@@ -80,7 +80,7 @@ public sealed class ListActivitiesEndpointTests
     public async Task GetListActivities_ReturnsCreatedActivity()
     {
         using var factory = CreateFactory();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateForTeacher(factory);
 
         var created = await client.PostAsJsonAsync(
             CreateActivityPath(ExistingOfferingSlug),
@@ -100,7 +100,7 @@ public sealed class ListActivitiesEndpointTests
     public async Task GetListActivities_ReturnsActivitiesOrderedByStartDate()
     {
         using var factory = CreateFactory();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateForTeacher(factory);
 
         var later = await client.PostAsJsonAsync(
             CreateActivityPath(ExistingOfferingSlug),
@@ -127,7 +127,7 @@ public sealed class ListActivitiesEndpointTests
     public async Task GetListActivities_WhenRepositoryReturnsCanceled_Returns499()
     {
         using var factory = CreateFactoryWithRepository(new CanceledActivityRepository());
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateForTeacher(factory);
 
         var response = await client.GetAsync(ListActivitiesPath);
 
@@ -136,5 +136,16 @@ public sealed class ListActivitiesEndpointTests
         Assert.That(
             (int)response.StatusCode,
             Is.EqualTo(StatusCodes.Status499ClientClosedRequest));
+    }
+
+    [Test]
+    public async Task GetListActivities_WithoutSession_ReturnsUnauthorized()
+    {
+        using var factory = CreateFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync(ListActivitiesPath);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 }
