@@ -19,7 +19,8 @@ public sealed class InviteStudentToTeamHandlerTests
     public void SetUp()
     {
         _team = StudentTeam.TryCreate(Guid.NewGuid(), Guid.NewGuid(), "Tim A", Creator, 2, 5).Team!;
-        _team.MemberStudentIds.Add(Member);
+        _team.InviteStudent(Member);
+        _team.AcceptInvitation(Member);
 
         _repository = new Mock<ITeamRepository>();
         _repository.Setup(x => x.GetByIdAsync(_team.Id, It.IsAny<CancellationToken>()))
@@ -179,7 +180,7 @@ public sealed class InviteStudentToTeamHandlerTests
     [Test]
     public async Task HandleAsync_RejectsWhenTeamIsLocked()
     {
-        _team.Status = TeamCompositionStatus.Locked;
+        _team.LockComposition();
         var candidate = Guid.NewGuid();
 
         var result = await _handler.HandleAsync(
@@ -197,7 +198,11 @@ public sealed class InviteStudentToTeamHandlerTests
     [Test]
     public async Task HandleAsync_RejectsWhenTeamIsFull()
     {
-        _team.MaxSize = _team.MemberStudentIds.Count;
+        _team = StudentTeam.TryCreate(Guid.NewGuid(), Guid.NewGuid(), "Tim A", Creator, 2, 2).Team!;
+        _team.InviteStudent(Member);
+        _team.AcceptInvitation(Member);
+        _repository.Setup(x => x.GetByIdAsync(_team.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(_team);
         var candidate = Guid.NewGuid();
 
         var result = await _handler.HandleAsync(
