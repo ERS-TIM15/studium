@@ -191,6 +191,142 @@ public sealed class TeamTests
     }
 
     [Test]
+    public void IsMember_IdentifiesMembersCorrectly()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        var other = Guid.NewGuid();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(team.IsMember(Creator), Is.True);
+            Assert.That(team.IsMember(other), Is.False);
+            Assert.That(team.IsMember(Guid.Empty), Is.False);
+        });
+    }
+
+    [Test]
+    public void HasPendingInvitation_IdentifiesPendingInvitations()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        var invited = Guid.NewGuid();
+        var notInvited = Guid.NewGuid();
+
+        team.InviteStudent(invited);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(team.HasPendingInvitation(invited), Is.True);
+            Assert.That(team.HasPendingInvitation(notInvited), Is.False);
+            Assert.That(team.HasPendingInvitation(Guid.Empty), Is.False);
+        });
+    }
+
+    [Test]
+    public void InviteStudent_AddsPendingInvitation_WhenValid()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        var candidate = Guid.NewGuid();
+
+        var result = team.InviteStudent(candidate);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.True);
+            Assert.That(team.PendingInvitationStudentIds, Contains.Item(candidate));
+            Assert.That(team.HasPendingInvitation(candidate), Is.True);
+        });
+    }
+
+    [Test]
+    public void InviteStudent_RejectsEmptyGuid()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+
+        var result = team.InviteStudent(Guid.Empty);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False);
+            Assert.That(team.PendingInvitationStudentIds, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void InviteStudent_RejectsExistingMember()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+
+        var result = team.InviteStudent(Creator);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False);
+            Assert.That(team.PendingInvitationStudentIds, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void InviteStudent_RejectsAlreadyInvitedStudent()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        var candidate = Guid.NewGuid();
+
+        team.InviteStudent(candidate);
+        var repeatedResult = team.InviteStudent(candidate);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(repeatedResult, Is.False);
+            Assert.That(team.PendingInvitationStudentIds.Count, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public void InviteStudent_RejectsWhenTeamIsLocked()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        team.LockComposition();
+        var candidate = Guid.NewGuid();
+
+        var result = team.InviteStudent(candidate);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False);
+            Assert.That(team.PendingInvitationStudentIds, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void InviteStudent_RejectsWhenTeamIsFull()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 1, 1).Team!;
+        var candidate = Guid.NewGuid();
+
+        var result = team.InviteStudent(candidate);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False);
+            Assert.That(team.PendingInvitationStudentIds, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void InviteStudent_AllowsJoinByWhenInviteOnly()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        var candidate = Guid.NewGuid();
+        team.SetInviteOnly(true);
+
+        Assert.That(team.AllowsJoinBy(candidate), Is.False);
+
+        team.InviteStudent(candidate);
+
+        Assert.That(team.AllowsJoinBy(candidate), Is.True);
+    }
+
+    [Test]
     public void Copy_IsIndependentSnapshot()
     {
         var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
@@ -323,6 +459,49 @@ public sealed class TeamTests
         var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5, teamId).Team!;
 
         Assert.That(team.Id, Is.EqualTo(teamId));
+    }
+
+    [Test]
+    public void AcceptInvitation_MovesInvitedStudentToMembers()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        var invited = Guid.NewGuid();
+        team.InviteStudent(invited);
+
+        var accepted = team.AcceptInvitation(invited);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(accepted, Is.True);
+            Assert.That(team.MemberStudentIds, Does.Contain(invited));
+            Assert.That(team.PendingInvitationStudentIds, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void AcceptInvitation_RejectsUninvitedMemberAndLockedTeam()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        var invited = Guid.NewGuid();
+        var stranger = Guid.NewGuid();
+        team.InviteStudent(invited);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(team.AcceptInvitation(Guid.Empty), Is.False);
+            Assert.That(team.AcceptInvitation(stranger), Is.False);
+            Assert.That(team.AcceptInvitation(Creator), Is.False);
+            Assert.That(team.MemberStudentIds, Has.Count.EqualTo(1));
+        });
+
+        team.LockComposition();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(team.AcceptInvitation(invited), Is.False);
+            Assert.That(team.MemberStudentIds, Has.Count.EqualTo(1));
+            Assert.That(team.PendingInvitationStudentIds, Does.Contain(invited));
+        });
     }
 
     private static void AssertFailure(TeamCreation creation)

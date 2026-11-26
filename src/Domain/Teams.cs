@@ -126,7 +126,11 @@ public class StudentTeam
     /// </summary>
     public bool InviteStudent(Guid studentId)
     {
-        if (studentId == Guid.Empty || IsMember(studentId) || _pendingInvitationStudentIds.Contains(studentId))
+        if (studentId == Guid.Empty
+            || Status == TeamCompositionStatus.Locked
+            || _memberStudentIds.Count >= MaxSize
+            || IsMember(studentId)
+            || _pendingInvitationStudentIds.Contains(studentId))
         {
             return false;
         }
@@ -143,6 +147,48 @@ public class StudentTeam
     /// </summary>
     public bool AllowsJoinBy(Guid studentId) =>
         !IsInviteOnly || _pendingInvitationStudentIds.Contains(studentId);
+
+    /// <summary>
+    /// Zaključava sastav tima kada je tim otvoren. Zaključan tim se ne otključava ovom
+    /// operacijom, pa ponovni poziv ne menja stanje i vraća <c>false</c>.
+    /// </summary>
+    public bool LockComposition()
+    {
+        if (Status == TeamCompositionStatus.Locked)
+        {
+            return false;
+        }
+
+        Status = TeamCompositionStatus.Locked;
+        return true;
+    }
+
+    /// <summary>
+    /// Prihvata poslati poziv: pozvani student prelazi iz liste poziva u članove.
+    /// Vraća <c>false</c> bez izmene stanja za prazan identifikator, zaključan ili pun tim,
+    /// studenta koji nije pozvan i studenta koji je već član.
+    /// </summary>
+    public bool AcceptInvitation(Guid studentId)
+    {
+        if (studentId == Guid.Empty
+            || Status == TeamCompositionStatus.Locked
+            || _memberStudentIds.Count >= MaxSize
+            || IsMember(studentId)
+            || !_pendingInvitationStudentIds.Contains(studentId))
+        {
+            return false;
+        }
+
+        _pendingInvitationStudentIds.Remove(studentId);
+        _memberStudentIds.Add(studentId);
+        return true;
+    }
+
+    /// <summary>
+    /// Proverava da li student već ima poslat poziv na čekanju.
+    /// </summary>
+    public bool HasPendingInvitation(Guid studentId) =>
+        studentId != Guid.Empty && PendingInvitationStudentIds.Contains(studentId);
 
     public static TeamCreation TryCreate(
         Guid courseOfferingId,
