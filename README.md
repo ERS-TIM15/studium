@@ -56,6 +56,12 @@ Memorijski adapter čuva i vraća snimke tima, pa izmene nad pročitanim objekto
 
 **Ograničenja:** identitet se privremeno čita iz zaglavlja `X-Student-Id` dok ne postoji prijava korisnika (ST-002) — to nije bezbednosna kontrola. Timovi se čuvaju u memoriji, a postoji jedan demo tim (`66666666-…`, predstavnik `55555555-…`). Pristupanje timu, slanje i prihvatanje poziva još nisu implementirani; pravilo je spremno u `StudentTeam.AllowsJoinBy` za taj slučaj upotrebe.
 
+### Delimična ST-021: zaključavanje sastava tima
+
+`PATCH /teams/{teamId}/lock` zaključava sastav formiranog tima (`StudentTeam.LockComposition()`): otvoren tim prelazi u `Locked`, ponovni poziv nad zaključanim timom daje `409`, a nepostojeći tim daje `404`. Zaključavanje ne menja ostala svojstva tima (članove, pozivnice, `inviteOnly`). Otključavanje sastava nije predviđeno.
+
+**Ograničenja:** ruta još ne proverava nastavničko ovlašćenje jer projekat nema prijavu korisnika (ST-002); timovi se čuvaju samo u memoriji i gube se pri ponovnom pokretanju. Ovaj tok ne predstavlja završenu implementaciju ST-021 (formiranje timova) niti bilo kog drugog ST zahteva.
+
 ### Početna strana sa karticama predmeta (ST-007, US-7.7)
 
 `GET /` otvara početnu stranu (`src/Api/wwwroot`). Student posle unosa tokena sesije vidi kartice svojih predmeta (naziv i akademska godina) iz zaštićenog `GET /pocetna`. U Development okruženju API pri pokretanju ispisuje demo token studenta. Detalji, dijagram toka i testovi: [docs/2/us-7.7-kartice-izvodjenja.md](docs/2/us-7.7-kartice-izvodjenja.md), odluka: [ADR-0004](docs/adr/0004-web-prikaz-pocetne-strane.md).

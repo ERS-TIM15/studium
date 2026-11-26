@@ -116,6 +116,7 @@ builder.Services.AddScoped<ListActivitiesHandler>();
 // Memorijski adapter mora biti singleton da bi izmene timova preživele između zahteva.
 builder.Services.AddSingleton<ITeamRepository>(_ => DemoData.CreateTeamRepository());
 builder.Services.AddScoped<SetTeamInviteOnlyHandler>();
+builder.Services.AddScoped<LockTeamHandler>();
 
 // ST-009: memorijsko skladište materijala do odluke o bazi (ADR).
 builder.Services.AddSingleton<IMaterialRepository, InMemoryMaterialRepository>();
@@ -306,6 +307,34 @@ app.MapPut("/teams/{teamId:guid}/invite-only", async (
             detail: result.Error,
             statusCode: StatusCodes.Status403Forbidden),
         SetTeamInviteOnlyStatus.Conflict => Results.Problem(
+            title: "Tim je u međuvremenu izmenjen",
+            detail: result.Error,
+            statusCode: StatusCodes.Status409Conflict),
+        _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError)
+    };
+});
+
+// ST-021: zaključavanje sastava formiranog studentskog tima. Ruta još ne proverava
+// nastavničko ovlašćenje jer projekat nema prijavu korisnika (ST-002); podaci su u memoriji.
+app.MapPatch("/teams/{teamId:guid}/lock", async (
+    Guid teamId,
+    LockTeamHandler handler,
+    CancellationToken cancellationToken) =>
+{
+    var result = await handler.HandleAsync(new LockTeamCommand(teamId), cancellationToken);
+
+    return result.Status switch
+    {
+        LockTeamStatus.Locked => Results.Ok(new { teamId, status = "Locked" }),
+        LockTeamStatus.TeamNotFound => Results.Problem(
+            title: "Tim nije pronađen",
+            detail: result.Error,
+            statusCode: StatusCodes.Status404NotFound),
+        LockTeamStatus.AlreadyLocked => Results.Problem(
+            title: "Sastav tima je već zaključan",
+            detail: result.Error,
+            statusCode: StatusCodes.Status409Conflict),
+        LockTeamStatus.Conflict => Results.Problem(
             title: "Tim je u međuvremenu izmenjen",
             detail: result.Error,
             statusCode: StatusCodes.Status409Conflict),
