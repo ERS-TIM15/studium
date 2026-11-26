@@ -143,7 +143,7 @@ public sealed class TeamTests
     {
         var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
         var invited = Guid.NewGuid();
-        team.PendingInvitationStudentIds.Add(invited);
+        team.InviteStudent(invited);
 
         team.SetInviteOnly(true);
 
@@ -168,7 +168,7 @@ public sealed class TeamTests
         var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
         var invited = Guid.NewGuid();
         var stranger = Guid.NewGuid();
-        team.PendingInvitationStudentIds.Add(invited);
+        team.InviteStudent(invited);
 
         team.SetInviteOnly(true);
 
@@ -195,15 +195,14 @@ public sealed class TeamTests
     {
         var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
         var invited = Guid.NewGuid();
-        team.PendingInvitationStudentIds.Add(invited);
+        team.InviteStudent(invited);
         team.SetInviteOnly(true);
         team.MarkStored(7);
 
         var copy = team.Copy();
 
         copy.SetInviteOnly(false);
-        copy.MemberStudentIds.Add(Guid.NewGuid());
-        copy.PendingInvitationStudentIds.Clear();
+        copy.InviteStudent(Guid.NewGuid());
 
         Assert.Multiple(() =>
         {
@@ -222,7 +221,7 @@ public sealed class TeamTests
     {
         var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
         var invited = Guid.NewGuid();
-        team.PendingInvitationStudentIds.Add(invited);
+        team.InviteStudent(invited);
 
         var copy = team.Copy();
 
@@ -234,6 +233,96 @@ public sealed class TeamTests
             Assert.That(copy.RepresentativeStudentId, Is.EqualTo(Creator));
             Assert.That(copy.IsRepresentative(Creator), Is.True);
         });
+    }
+
+    [Test]
+    public void StudentTeam_ExposesNoPublicSetters()
+    {
+        var writable = typeof(StudentTeam)
+            .GetProperties()
+            .Where(property => property.SetMethod is { IsPublic: true })
+            .Select(property => property.Name)
+            .ToArray();
+
+        Assert.That(writable, Is.Empty);
+    }
+
+    [Test]
+    public void MemberStudentIds_IsReadOnlyView()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+
+        var members = team.MemberStudentIds;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(members, Is.EqualTo(new[] { Creator }));
+            Assert.That(((ICollection<Guid>)members).IsReadOnly, Is.True);
+            Assert.Throws<NotSupportedException>(() => ((ICollection<Guid>)members).Add(Guid.NewGuid()));
+            Assert.That(team.MemberStudentIds, Is.EqualTo(new[] { Creator }));
+        });
+    }
+
+    [Test]
+    public void PendingInvitationStudentIds_IsReadOnlyView()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+
+        var invitations = team.PendingInvitationStudentIds;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(invitations, Is.Empty);
+            Assert.That(((ICollection<Guid>)invitations).IsReadOnly, Is.True);
+            Assert.Throws<NotSupportedException>(() => ((ICollection<Guid>)invitations).Add(Guid.NewGuid()));
+        });
+    }
+
+    [Test]
+    public void MemberStudentIds_ViewCannotBeMutatedThroughReturnedCollection()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        var stranger = Guid.NewGuid();
+
+        Assert.Throws<NotSupportedException>(() => ((IList<Guid>)team.MemberStudentIds).Add(stranger));
+        Assert.That(team.MemberStudentIds, Does.Not.Contain(stranger));
+    }
+
+    [Test]
+    public void InviteStudent_RejectsEmptyExistingMemberAndDuplicate()
+    {
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5).Team!;
+        var invited = Guid.NewGuid();
+
+        var accepted = team.InviteStudent(invited);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(accepted, Is.True);
+            Assert.That(team.InviteStudent(Guid.Empty), Is.False);
+            Assert.That(team.InviteStudent(Creator), Is.False);
+            Assert.That(team.InviteStudent(invited), Is.False);
+            Assert.That(team.PendingInvitationStudentIds, Is.EqualTo(new[] { invited }));
+            Assert.That(team.MemberStudentIds, Is.EqualTo(new[] { Creator }));
+        });
+    }
+
+    [Test]
+    public void TryCreate_RejectsEmptyTeamId()
+    {
+        var creation = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5, Guid.Empty);
+
+        AssertFailure(creation);
+    }
+
+    [Test]
+    public void TryCreate_UsesProvidedTeamIdForSeededData()
+    {
+        var teamId = Guid.NewGuid();
+
+        var team = StudentTeam.TryCreate(Offering, Activity, "Tim A", Creator, 2, 5, teamId).Team!;
+
+        Assert.That(team.Id, Is.EqualTo(teamId));
     }
 
     private static void AssertFailure(TeamCreation creation)
