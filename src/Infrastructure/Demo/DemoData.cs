@@ -3,6 +3,7 @@ using Application.Courses;
 using Application.Engagements;
 using Application.Enrollments;
 using Application.Interfaces;
+using Application.Materials;
 using Application.Teams;
 using Domain.Courses;
 using Domain.Entities;
@@ -13,6 +14,7 @@ using Infrastructure.Activities;
 using Infrastructure.Courses;
 using Infrastructure.Engagements;
 using Infrastructure.Enrollments;
+using Infrastructure.Materials;
 using Infrastructure.Repositories;
 using Infrastructure.Teams;
 using Studium.Domain.Entities;
@@ -59,6 +61,19 @@ public static class DemoData
             new Course(OibId, "OIB", "Osnove informacione bezbednosti")
         });
     }
+
+    /// <summary>
+    /// Demo angažovanja za proveru prava nad izvođenjem (ST-005) iz ugla aktivnosti:
+    /// demo nastavnik je odgovorni na ERS i nastavnik na OIB izvođenju, a demo asistentkinja
+    /// je asistent na OIB (sa ERS je uklonjena, kao u demo podacima ST-007).
+    /// </summary>
+    public static IOfferingStaffChecker CreateOfferingStaffChecker() =>
+        new InMemoryOfferingStaffChecker(new[]
+        {
+            (DemoTeacherId, DemoActivityOfferings.ErsOfferingId),
+            (DemoTeacherId, DemoActivityOfferings.OibOfferingId),
+            (DemoAssistantId, DemoActivityOfferings.OibOfferingId)
+        });
 
     public static IActivityRepository CreateActivityRepository()
     {

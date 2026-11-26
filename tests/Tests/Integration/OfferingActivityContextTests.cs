@@ -31,7 +31,7 @@ public sealed class OfferingActivityContextTests
     public async Task CreateActivity_WithOfferingSlug_StoresOfferingAsContext()
     {
         using var factory = CreateFactory();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateForTeacher(factory);
 
         var response = await client.PostAsJsonAsync("/Course/ERS-2026-27-00001/CreateActivity", new
         {
@@ -55,7 +55,7 @@ public sealed class OfferingActivityContextTests
     public async Task CreateActivity_WithCatalogCourseSlug_IsRejectedWhenOfferingsResolveTheContext()
     {
         using var factory = CreateFactory();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateForTeacher(factory);
 
         var response = await client.PostAsJsonAsync("/Course/ERS-11111/CreateActivity", new
         {
@@ -72,7 +72,7 @@ public sealed class OfferingActivityContextTests
     public async Task ListActivities_ReturnsActivityStoredForOffering()
     {
         using var factory = CreateFactory();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateForTeacher(factory);
 
         await client.PostAsJsonAsync("/Course/OIB-2026-27-00002/CreateActivity", new
         {

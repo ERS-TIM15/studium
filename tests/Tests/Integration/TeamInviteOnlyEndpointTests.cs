@@ -12,7 +12,7 @@ namespace Tests.Integration;
 
 /// <summary>
 /// ST-021 (kontrola pristupa): HTTP sloj rute PUT /teams/{teamId}/invite-only.
-/// Testovi pokrivaju JSON vezivanje tela, zaglavlje X-Student-Id, DI registraciju i
+/// Testovi pokrivaju JSON vezivanje tela, identitet iz sesije (US-7.5), DI registraciju i
 /// mapiranja 200/400/401/403/404, kao i da odbijeni zahtevi ne menjaju demo tim.
 /// </summary>
 [TestFixture]
@@ -26,9 +26,9 @@ public sealed class TeamInviteOnlyEndpointTests
     public async Task PutInviteOnly_RepresentativeClosesTeam_ReturnsOkAndStoresState()
     {
         using var factory = new WebApplicationFactory<Program>();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateFor(factory, Representative);
 
-        var response = await PutInviteOnlyAsync(client, Representative, inviteOnly: true);
+        var response = await PutInviteOnlyAsync(client, inviteOnly: true);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
@@ -45,10 +45,10 @@ public sealed class TeamInviteOnlyEndpointTests
     public async Task PutInviteOnly_RepresentativeReopensTeam_ReturnsOkAndStoresState()
     {
         using var factory = new WebApplicationFactory<Program>();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateFor(factory, Representative);
 
-        await PutInviteOnlyAsync(client, Representative, inviteOnly: true);
-        var response = await PutInviteOnlyAsync(client, Representative, inviteOnly: false);
+        await PutInviteOnlyAsync(client, inviteOnly: true);
+        var response = await PutInviteOnlyAsync(client, inviteOnly: false);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
@@ -63,7 +63,7 @@ public sealed class TeamInviteOnlyEndpointTests
         using var factory = new WebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
-        var response = await PutInviteOnlyAsync(client, studentId: null, inviteOnly: true);
+        var response = await PutInviteOnlyAsync(client, inviteOnly: true);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
         Assert.That((await GetStoredTeamAsync(factory)).IsInviteOnly, Is.False);
@@ -73,9 +73,9 @@ public sealed class TeamInviteOnlyEndpointTests
     public async Task PutInviteOnly_WithoutInviteOnlyField_ReturnsBadRequestAndLeavesTeamOpen()
     {
         using var factory = new WebApplicationFactory<Program>();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateFor(factory, Representative);
 
-        var response = await PutInviteOnlyAsync(client, Representative, json: "{}");
+        var response = await PutInviteOnlyAsync(client, json: "{}");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         Assert.That((await GetStoredTeamAsync(factory)).IsInviteOnly, Is.False);
@@ -85,9 +85,9 @@ public sealed class TeamInviteOnlyEndpointTests
     public async Task PutInviteOnly_StudentWhoIsNotRepresentative_ReturnsForbiddenAndLeavesTeamOpen()
     {
         using var factory = new WebApplicationFactory<Program>();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateFor(factory, OtherStudent);
 
-        var response = await PutInviteOnlyAsync(client, OtherStudent, inviteOnly: true);
+        var response = await PutInviteOnlyAsync(client, inviteOnly: true);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
         Assert.That((await GetStoredTeamAsync(factory)).IsInviteOnly, Is.False);
@@ -97,11 +97,10 @@ public sealed class TeamInviteOnlyEndpointTests
     public async Task PutInviteOnly_UnknownTeam_ReturnsNotFound()
     {
         using var factory = new WebApplicationFactory<Program>();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateFor(factory, Representative);
 
         var response = await client.SendAsync(BuildRequest(
             $"/teams/{Guid.NewGuid()}/invite-only",
-            Representative,
             "{\"inviteOnly\":true}"));
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
@@ -109,28 +108,17 @@ public sealed class TeamInviteOnlyEndpointTests
 
     private static Task<HttpResponseMessage> PutInviteOnlyAsync(
         HttpClient client,
-        Guid? studentId,
         bool inviteOnly = true,
         string? json = null) =>
         client.SendAsync(BuildRequest(
             TeamPath,
-            studentId,
             json ?? $"{{\"inviteOnly\":{inviteOnly.ToString().ToLowerInvariant()}}}"));
 
-    private static HttpRequestMessage BuildRequest(string path, Guid? studentId, string json)
-    {
-        var request = new HttpRequestMessage(HttpMethod.Put, path)
+    private static HttpRequestMessage BuildRequest(string path, string json) =>
+        new(HttpMethod.Put, path)
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
-
-        if (studentId is { } id)
-        {
-            request.Headers.Add("X-Student-Id", id.ToString());
-        }
-
-        return request;
-    }
 
     private static async Task<StudentTeam> GetStoredTeamAsync(WebApplicationFactory<Program> factory)
     {

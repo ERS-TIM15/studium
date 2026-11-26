@@ -6,7 +6,8 @@ public enum CreateActivityStatus
     ContextNotFound,
     InvalidRequest,
     Conflict,
-    Canceled
+    Canceled,
+    Forbidden
 }
 
 public sealed record CreateActivityResult(
@@ -26,6 +27,10 @@ public sealed record CreateActivityResult(
 
     public static CreateActivityResult Conflict(string message) =>
         new(CreateActivityStatus.Conflict, Error: message);
+
+    public static CreateActivityResult Forbidden() =>
+        new(CreateActivityStatus.Forbidden,
+            Error: "Samo nastavno osoblje izvođenja može da kreira aktivnosti.");
 
     public static CreateActivityResult Canceled() =>
         new(CreateActivityStatus.Canceled,

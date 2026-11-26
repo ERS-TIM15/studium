@@ -56,7 +56,7 @@ public sealed class CreateActivityEndpointTests
     public async Task PostCreateActivity_ForExistingOfferingSlug_ReturnsCreated()
     {
         using var factory = CreateFactory();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateForTeacher(factory);
 
         var response = await client.PostAsJsonAsync(
             CreateActivityPath(ExistingOfferingSlug),
@@ -82,7 +82,7 @@ public sealed class CreateActivityEndpointTests
     public async Task PostCreateActivity_WithCatalogCourseSlug_ReturnsNotFound()
     {
         using var factory = CreateFactory();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateForTeacher(factory);
 
         var response = await client.PostAsJsonAsync(
             CreateActivityPath(CatalogCourseSlug),
@@ -95,7 +95,7 @@ public sealed class CreateActivityEndpointTests
     public async Task PostCreateActivity_ForUnknownOfferingSlug_ReturnsNotFoundAndDoesNotStore()
     {
         using var factory = CreateFactory();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateForTeacher(factory);
 
         var response = await client.PostAsJsonAsync(
             CreateActivityPath(MissingContextSlug),
@@ -109,7 +109,7 @@ public sealed class CreateActivityEndpointTests
     public async Task PostCreateActivity_WithBlankName_ReturnsBadRequestAndDoesNotStore()
     {
         using var factory = CreateFactory();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateForTeacher(factory);
 
         var response = await client.PostAsJsonAsync(
             CreateActivityPath(ExistingOfferingSlug),
@@ -123,7 +123,7 @@ public sealed class CreateActivityEndpointTests
     public async Task PostCreateActivity_WithReversedInterval_ReturnsBadRequestAndDoesNotStore()
     {
         using var factory = CreateFactory();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateForTeacher(factory);
 
         var response = await client.PostAsJsonAsync(
             CreateActivityPath(ExistingOfferingSlug),
@@ -137,7 +137,7 @@ public sealed class CreateActivityEndpointTests
     public async Task PostCreateActivity_WithRawIdentifier_ReturnsNotFound()
     {
         using var factory = CreateFactory();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateForTeacher(factory);
 
         var response = await client.PostAsJsonAsync(
             CreateActivityPath(ExistingOfferingId.ToString()),
@@ -151,7 +151,7 @@ public sealed class CreateActivityEndpointTests
     public async Task PostCreateActivity_WithLowercaseSlug_ReturnsCreated()
     {
         using var factory = CreateFactory();
-        using var client = factory.CreateClient();
+        using var client = SessionClients.CreateForTeacher(factory);
 
         var response = await client.PostAsJsonAsync(
             CreateActivityPath(ExistingOfferingSlug.ToLowerInvariant()),
@@ -161,5 +161,33 @@ public sealed class CreateActivityEndpointTests
 
         var created = await response.Content.ReadFromJsonAsync<ActivityResponse>();
         Assert.That(created!.ContextId, Is.EqualTo(ExistingOfferingId));
+    }
+
+    [Test]
+    public async Task PostCreateActivity_WithoutSession_ReturnsUnauthorized()
+    {
+        using var factory = CreateFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            CreateActivityPath(ExistingOfferingSlug),
+            ValidBody());
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+        await AssertNothingStoredAsync(factory);
+    }
+
+    [Test]
+    public async Task PostCreateActivity_ByStudent_ReturnsForbidden()
+    {
+        using var factory = CreateFactory();
+        using var client = SessionClients.CreateForStudent(factory);
+
+        var response = await client.PostAsJsonAsync(
+            CreateActivityPath(ExistingOfferingSlug),
+            ValidBody());
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+        await AssertNothingStoredAsync(factory);
     }
 }
